@@ -17,8 +17,8 @@ int main(int argc, char* argv[]){
         return 1;
     }
     
-    char* password = argv[2];
-    char* tweak_pwd = argv[3];
+    string password = argv[2];
+    string tweak_pwd = argv[3];
 
     string content; 
     cin >> content;

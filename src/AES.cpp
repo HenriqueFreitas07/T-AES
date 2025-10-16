@@ -1,21 +1,24 @@
 #include "../include/AES.hpp"
+#include <vector>
+#include <string>
+#include <iostream>
 
 // AES works on 128 bit blocks
 // 128 bits = 16 bytes
 // 4x4 matrix = 16 positions = 16 bytes
 // each byte is a state
 
-void AES::ShiftRows() {
+void AES::ShiftRows(vector<vector<unsigned char>>& matrix) {
 }
 
-void AES::MixColumns() {
+void AES::MixColumns(vector<vector<unsigned char>>& matrix) {
 }
 
-void AES::AddRoundKey() {
+void AES::AddRoundKey(vector<vector<unsigned char>>& matrix) {
 }
 
 // SubBytes - replaces each byte with S-box value
-void AES::SubBytes() {
+void AES::SubBytes(vector<vector<unsigned char>>& matrix) {
     // Uses the S-box to substitute each byte in the state
 }
 
@@ -26,6 +29,7 @@ void AES::KeyExpansion() {
 
 
 // this is used per block
+// maybe we do block_encrypt and then we call this function several times
 string AES::encrypt(string plaintext) {
     string result = "";
     

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <iostream>
+#include <vector>
+#include <string>   
 
 using namespace std;
 
@@ -24,10 +26,11 @@ class AES {
     }
 
     // AES Operations
-    void ShiftRows();
-    void MixColumns();
-    void AddRoundKey();
-    void SubBytes();
+    // Do they all need the state matrix as input?
+    void ShiftRows(vector<vector<unsigned char>>& matrix);
+    void MixColumns(vector<vector<unsigned char>>& matrix);
+    void AddRoundKey(vector<vector<unsigned char>>& matrix);
+    void SubBytes(vector<vector<unsigned char>>& matrix);
     void KeyExpansion();
     
 

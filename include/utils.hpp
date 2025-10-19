@@ -23,6 +23,10 @@ namespace utils {
         return bformatted;
     }
 
+    uint8_t xtime(uint8_t x) {
+        return (x << 1) ^ ((x & 0x80) ? 0x1b : 0x00);
+    }
+
     /// @brief Print a vector of any integer type
     /// @param v Vector to print
     template<typename T>

@@ -4,7 +4,7 @@
 #include <iostream>
 #include <vector>
 #include "../include/utils.hpp"
-#include "AES.cpp"
+#include "../include/AES.hpp"
 
 
 using namespace std;
@@ -26,9 +26,9 @@ int main(int argc, char* argv[]){
         return 1;
     }
     
-    string password = argv[2];
-    if(argc ==4){
-        string tweak_pwd = argv[3];
+    const char* password = argv[2];
+    const char* tweak_pwd = (argc == 4) ? argv[3] : nullptr;
+    if(argc == 4){
         TWEAK=true;
     }
 
@@ -42,12 +42,11 @@ int main(int argc, char* argv[]){
         // Use read() 
         cin.read(block, 16);
         current_block_size = static_cast<size_t>(cin.gcount());
+        if(current_block_size == 0) break;
         // Process the block (even if partial)
         vector<uint8_t> converted = utils::convertToBlock(block,current_block_size);
         all_blocks.push_back(converted);
         if(current_block_size <16) break;  // EOF reached
-
-        if(current_block_size < 16) break;  // Last partial block
     }
 
     // Set AES size
@@ -74,16 +73,24 @@ int main(int argc, char* argv[]){
     default:
         break;
     }
-    //Create AES object
-    AES aes=AES(password,"");
+    // Create AES object
+    // Convert char* to vector<uint8_t> using vector constructor (single line!)
+    vector<uint8_t> key(password, password + strlen(password));
+    vector<uint8_t> tweak(tweak_pwd ? tweak_pwd : "",
+                          tweak_pwd ? tweak_pwd + strlen(tweak_pwd) : nullptr);
+
+    AES aes(SIZE, ROUNDS, key, tweak);
     vector<vector<uint8_t>> cipherBlocks;
     for (size_t i = 0; i < all_blocks.size(); i++)
     {
-        cout <<"Encrypting the following block"<< endl;
+
+        vector<uint8_t> current_block= all_blocks.at(i);
+        cout <<"Encrypting the following block (size "<< current_block.size() << " bytes)"<< endl;
         utils::printVector(all_blocks[i]);
-        vector<uint8_t> current_block= all_blocks[i];
         cipherBlocks.push_back(aes.encrypt_block(current_block));
     }
+
+    cout << endl<< "Encrypted bytes:" << endl;
     for (size_t i = 0; i < cipherBlocks.size(); i++)
     {
         utils::printVector(cipherBlocks[i]);

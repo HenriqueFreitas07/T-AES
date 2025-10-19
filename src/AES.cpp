@@ -28,57 +28,58 @@ void AES::KeyExpansion() {
 }
 
 
-// this is used per block
-// maybe we do block_encrypt and then we call this function several times
-string AES::encrypt(string plaintext) {
-    string result = "";
-    
-    // process plaintext in 16-byte blocks
-    for(int i = 0; i < plaintext.length(); i += 16) {
-        // get 16-byte block (or remaining bytes)
-        string block = plaintext.substr(i, 16);
-        
-        // pad if less than 16 bytes
-        while(block.length() < 16) {
-            block += '\0'; // null padding
-        }
-        
-        // first convert string to bytes
-        vector<unsigned char> bytes;
-        for(char c : block) {
-            bytes.push_back((unsigned char)c);
-        }
-        
-        // second convert bytes to 4x4 matrix (AES state)
-        // aes works on a 4x4 matrix
-        // state[0] = [byte, byte, byte, byte]  ← Row 0 (4 bytes)
-        // state[1][0] Row 1, Column 0 (2nd row, 1st column)
-
-        vector<vector<unsigned char>> matrix(4, vector<unsigned char>(4));
-        for(int i = 0; i < 4; i++) {
-            for(int j = 0; j < 4; j++) {
-                matrix[i][j] = bytes[i + 4*j];
-            }
-        }
-        
-        // (SubBytes, ShiftRows, MixColumns, AddRoundKey)
-        SubBytes(matrix);
-        ShiftRows(matrix);
-        MixColumns(matrix);
-        AddRoundKey(matrix);
-
-        // fourth convert matrix back to string
-        string ciphertext_block;
-        for(int i = 0; i < 4; i++) {
-            for(int j = 0; j < 4; j++) {
-                ciphertext_block += matrix[i][j];
-            }
-        }
-        result += ciphertext_block;
+// takes 16 bytes, returns 16 bytes
+vector<uint8_t> AES::encrypt_block(vector<uint8_t> block) {
+    // Ensure block is exactly 16 bytes, just for safety
+    if(block.size() != 16) {
+        throw invalid_argument("Block must be exactly 16 bytes");
     }
     
-    return result; 
+    // Convert 16 bytes to 4x4 matrix (AES state)
+    vector<vector<uint8_t>> matrix(4, vector<uint8_t>(4));
+    for(int i = 0; i < 4; i++) {
+        for(int j = 0; j < 4; j++) {
+            matrix[i][j] = block[i + 4*j];
+        }
+    }
+    
+    // Apply AES operations
+    SubBytes(matrix);
+    ShiftRows(matrix);
+    MixColumns(matrix);
+    AddRoundKey(matrix);
+    
+    // Convert matrix back to 16 bytes
+    vector<uint8_t> result(16);
+    for(int i = 0; i < 4; i++) {
+        for(int j = 0; j < 4; j++) {
+            result[i + 4*j] = matrix[i][j];
+        }
+    }
+    
+    return result;
 }
+
+// string AES::encrypt(string plaintext) {
+//     string result = "";
+    
+//     for(int i = 0; i < plaintext.length(); i += 16) {
+//         vector<uint8_t> block(16, 0); // Initialize with zeros (padding)
+//         int block_size = min(16, (int)plaintext.length() - i);
+        
+//         for(int j = 0; j < block_size; j++) {
+//             block[j] = (uint8_t)plaintext[i + j];
+//         }
+        
+//         vector<uint8_t> encrypted_block = encrypt_block(block);
+        
+//         for(uint8_t byte : encrypted_block) {
+//             result += (char)byte;
+//         }
+//     }
+    
+//     return result;
+// }
 
 string AES::decrypt(string ciphertext) {
     return ciphertext; 

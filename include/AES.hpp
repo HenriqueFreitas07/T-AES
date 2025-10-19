@@ -2,7 +2,8 @@
 
 #include <iostream>
 #include <vector>
-#include <string>   
+#include <string>
+#include <cstdint>   
 
 using namespace std;
 
@@ -15,8 +16,12 @@ class AES {
     public: 
     AES(string key, string tweak_key): key(key), tweak_key(tweak_key){}
     
-    string encrypt(string plaintext);
-    string decrypt(string ciphertext);
+    // changed from string to vector<uint8_t> think it was this you wanted
+    vector<uint8_t> encrypt_block(vector<uint8_t> block);
+    vector<uint8_t> decrypt_block(vector<uint8_t> block);
+    
+    // string encrypt(string plaintext);
+    // string decrypt(string ciphertext);
 
     private:
     string round(string input){

@@ -10,6 +10,9 @@ using namespace std;
 class AES {
    string key;
    string tweak_key;
+   
+   // AES S-box (Substitution box) - the lookup table
+   static const uint8_t sbox[256];
 
 
     // k_size and n_rounds not included
@@ -17,6 +20,7 @@ class AES {
     AES(string key, string tweak_key): key(key), tweak_key(tweak_key){}
     
     // changed from string to vector<uint8_t> think it was this you wanted
+    // The blocks will now be the string converted to a vector of uint8_t
     vector<uint8_t> encrypt_block(vector<uint8_t> block);
     vector<uint8_t> decrypt_block(vector<uint8_t> block);
     

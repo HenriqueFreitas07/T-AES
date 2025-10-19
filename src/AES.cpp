@@ -1,4 +1,5 @@
 #include "../include/AES.hpp"
+
 #include <vector>
 #include <string>
 #include <iostream>
@@ -17,9 +18,14 @@ void AES::MixColumns(vector<vector<unsigned char>>& matrix) {
 void AES::AddRoundKey(vector<vector<unsigned char>>& matrix) {
 }
 
-// SubBytes - replaces each byte with S-box value
 void AES::SubBytes(vector<vector<unsigned char>>& matrix) {
-    // Uses the S-box to substitute each byte in the state
+    // here im basically traversing the matrix and substituting each byte using the sbox
+    for (size_t r = 0; r < matrix.size(); ++r) {
+        for (size_t c = 0; c < matrix[r].size(); ++c) {
+            uint8_t v = static_cast<uint8_t>(matrix[r][c]);
+            matrix[r][c] = static_cast<unsigned char>(AES::sbox[v]);
+        }
+    }
 }
 
 // Key expansion - generates round keys from main key
@@ -58,29 +64,4 @@ vector<uint8_t> AES::encrypt_block(vector<uint8_t> block) {
     }
     
     return result;
-}
-
-// string AES::encrypt(string plaintext) {
-//     string result = "";
-    
-//     for(int i = 0; i < plaintext.length(); i += 16) {
-//         vector<uint8_t> block(16, 0); // Initialize with zeros (padding)
-//         int block_size = min(16, (int)plaintext.length() - i);
-        
-//         for(int j = 0; j < block_size; j++) {
-//             block[j] = (uint8_t)plaintext[i + j];
-//         }
-        
-//         vector<uint8_t> encrypted_block = encrypt_block(block);
-        
-//         for(uint8_t byte : encrypted_block) {
-//             result += (char)byte;
-//         }
-//     }
-    
-//     return result;
-// }
-
-string AES::decrypt(string ciphertext) {
-    return ciphertext; 
 }

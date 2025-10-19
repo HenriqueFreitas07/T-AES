@@ -1,10 +1,19 @@
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
+#include <vector>
+#include "../include/utils.hpp"
+#include "AES.cpp"
+
 
 using namespace std;
 
+bool TWEAK = false;
+
 int main(int argc, char* argv[]){
 
-    if (argc < 4)
+    if (argc < 3)
     {
         cout << "Required arguments: <aes_size (128 | 192 | 256)> <password> <tweak_password?>" << endl;
         return 1;
@@ -18,12 +27,29 @@ int main(int argc, char* argv[]){
     }
     
     string password = argv[2];
-    string tweak_pwd = argv[3];
+    if(argc ==4){
+        string tweak_pwd = argv[3];
+        TWEAK=true;
+    }
 
-    string content; 
-    cin >> content;
+    vector<vector<uint8_t>> all_blocks;
 
-    cout << content;
+    // A block has 128bit = 128/8 => 16 bytes or 16 chars
+    char block[16]{};
+    int current_block_size=0;
+    // read all the bytes from the stdin until EOF
+    while(true){
+        // Use read() 
+        cin.read(block, 16);
+        current_block_size = static_cast<size_t>(cin.gcount());
+        // Process the block (even if partial)
+        vector<uint8_t> converted = utils::convertToBlock(block,current_block_size);
+        all_blocks.push_back(converted);
+        if(current_block_size <16) break;  // EOF reached
+
+        if(current_block_size < 16) break;  // Last partial block
+    }
+
     // Set AES size
     switch (size)
     {
@@ -47,6 +73,20 @@ int main(int argc, char* argv[]){
         break;
     default:
         break;
+    }
+    //Create AES object
+    AES aes=AES(password,"");
+    vector<vector<uint8_t>> cipherBlocks;
+    for (size_t i = 0; i < all_blocks.size(); i++)
+    {
+        cout <<"Encrypting the following block"<< endl;
+        utils::printVector(all_blocks[i]);
+        vector<uint8_t> current_block= all_blocks[i];
+        cipherBlocks.push_back(aes.encrypt_block(current_block));
+    }
+    for (size_t i = 0; i < cipherBlocks.size(); i++)
+    {
+        utils::printVector(cipherBlocks[i]);
     }
     
     return 0;

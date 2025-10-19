@@ -58,4 +58,4 @@ dkms.conf
 # our config 
 *.txt
 *.json
-bin/*
+bin/**.bin

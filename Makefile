@@ -22,6 +22,14 @@ INCLUDES := -I$(INCLUDE_DIR)
 # Default target
 all: $(TARGET)
 
+# Encrypt program target
+encrypt: $(BIN_DIR)/encrypt
+
+$(BIN_DIR)/encrypt: $(BUILD_DIR)/encrypt.o $(BUILD_DIR)/utils.o $(BUILD_DIR)/AES.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ -o $@
+	@echo "Encrypt program built: $(BIN_DIR)/encrypt"
+
 # Link object files to create executable
 $(TARGET): $(OBJS)
 	@mkdir -p $(BIN_DIR)

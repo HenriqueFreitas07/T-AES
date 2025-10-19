@@ -12,6 +12,11 @@ class AES {
   string tweak_key;
 
   // k_size and n_rounds not included
+
+  // Round keys storage
+  vector<vector<uint8_t>> round_keys;
+
+
 public:
   AES(string key, string tweak_key) : key(key), tweak_key(tweak_key) {}
 
@@ -24,15 +29,16 @@ public:
   // string decrypt(string ciphertext);
 
 private:
-  string round(string input) { return input; }
-
   // AES Operations
   // Do they all need the state matrix as input?
   void ShiftRows(vector<vector<uint8_t>> &matrix);
   void MixColumns(vector<vector<uint8_t>> &matrix);
-  void AddRoundKey(vector<vector<uint8_t>> &matrix);
   void SubBytes(vector<vector<uint8_t>> &matrix);
-  void KeyExpansion();
+
+
+  void AddRoundKey(vector<vector<uint8_t>> &matrix, const vector<uint8_t> &round_key);
+
+  void KeyExpansion(const vector<uint8_t> &key);
 
   // estava-me a dar inline definition error mas assim ja nao dá
   // inline header definition (C++17). Keep ONLY this, remove any other

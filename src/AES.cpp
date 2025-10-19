@@ -21,36 +21,12 @@ void AES::ShiftRows(vector<vector<uint8_t>> &matrix) {
   // shifted Row 1 is shifted left by 1 Row 2 is shifted left by 2 Row 3 is
   // shifted left by 3
   for (size_t r = 1; r < matrix.size(); ++r) {
-    // vector<uint8_t> temp = matrix[r]; // copy of the current row
-    // size_t shift = r; // number of positions to shift
-    // for (size_t c = 0; c < matrix[r].size(); ++c) {
-    //     matrix[r][c] = temp[(c + shift) % matrix[r].size()];
-    // }
     rotate(matrix[r].begin(), matrix[r].begin() + r,
            matrix[r].end()); // can use rotate instead
   }
 }
 
 // #####################################################################################
-
-// Galois Field (2^8) multiplication
-// support function for MixColumns
-// multiplies two bytes in GF(2^8)
-// static inline uint8_t gmul(uint8_t a, uint8_t b) {
-//   uint8_t p = 0; // product
-//   for (int counter = 0; counter < 8; counter++) {
-//     if (b & 1) {
-//       p ^= a;
-//     }
-//     bool hi_bit_set = (a & 0x80);
-//     a <<= 1;
-//     if (hi_bit_set) {
-//       a ^= 0x1b; // x^8 + x^4 + x^3 + x + 1
-//     }
-//     b >>= 1;
-//   }
-//   return p;
-// }
 
 // fast opreation that multiplies a byte by 2 in GF(2^8)
 static inline uint8_t xtime(uint8_t x) {

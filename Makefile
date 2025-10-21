@@ -2,6 +2,7 @@
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2
 DEBUGFLAGS := -g -O0
+LDFLAGS := -lssl -lcrypto
 
 # Directories
 SRC_DIR := src
@@ -25,15 +26,23 @@ all: $(TARGET)
 # Encrypt program target
 encrypt: $(BIN_DIR)/encrypt
 
-$(BIN_DIR)/encrypt: $(BUILD_DIR)/encrypt.o $(BUILD_DIR)/utils.o $(BUILD_DIR)/AES.o
+$(BIN_DIR)/encrypt: $(BUILD_DIR)/encrypt.o
 	@mkdir -p $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $^ -o $@
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "Encrypt program built: $(BIN_DIR)/encrypt"
+
+# Verify AES program target
+verify: $(BIN_DIR)/verify_aes
+
+$(BIN_DIR)/verify_aes: $(BUILD_DIR)/verify_aes.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@echo "Verify program built: $(BIN_DIR)/verify_aes"
 
 # Link object files to create executable
 $(TARGET): $(OBJS)
 	@mkdir -p $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $(OBJS) -o $(TARGET)
+	$(CXX) $(CXXFLAGS) $(OBJS) -o $(TARGET) $(LDFLAGS)
 	@echo "Build complete: $(TARGET)"
 
 # Compile source files to object files

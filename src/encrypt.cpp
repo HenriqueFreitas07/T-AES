@@ -25,11 +25,19 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  const char *password = argv[2];
-  const char *tweak_pwd = (argc == 4) ? argv[3] : nullptr;
   if (argc == 4) {
     TWEAK = true;
   }
+
+  // pwd parsing
+  const unsigned char *password =
+      reinterpret_cast<const unsigned char *>(argv[2]);
+  const unsigned long int password_length = strlen(argv[2]);
+
+  // tweak parsing
+  const unsigned char *tweak_pwd =
+      TWEAK ? reinterpret_cast<const unsigned char *>(argv[3]) : nullptr;
+  const unsigned long int tweak_length = TWEAK ? strlen(argv[3]) : 0;
 
   vector<vector<uint8_t>> all_blocks;
 
@@ -38,48 +46,57 @@ int main(int argc, char *argv[]) {
   int current_block_size = 0;
   // read all the bytes from the stdin until EOF
   while (true) {
-    // Use read()
     cin.read(block, 16);
     current_block_size = static_cast<size_t>(cin.gcount());
     if (current_block_size == 0)
       break;
-    // Process the block (even if partial)
     vector<uint8_t> converted =
         utils::convertToBlock(block, current_block_size);
     all_blocks.push_back(converted);
     if (current_block_size < 16)
-      break; // EOF reached
+      break; // EOF reached or last block
   }
 
-  // Set AES size
+  unsigned int key_size, n_rounds;
+
   switch (size) {
   case 128:
-#ifndef SIZE
-#define SIZE 128
-#define ROUNDS 10
-#endif
+    key_size = 128;
+    n_rounds = 10;
     break;
   case 192:
-#ifndef SIZE
-#define SIZE 192
-#define ROUNDS 12
-#endif
+    key_size = 192;
+    n_rounds = 12;
     break;
   case 256:
-#ifndef SIZE
-#define SIZE 256
-#define ROUNDS 14
-#endif
+    key_size = 256;
+    n_rounds = 14;
     break;
   default:
+    key_size = 128;
+    n_rounds = 10;
     break;
   }
-  // Create AES object
-  vector<uint8_t> key(password, password + strlen(password));
-  vector<uint8_t> tweak(tweak_pwd ? tweak_pwd : "",
-                        tweak_pwd ? tweak_pwd + strlen(tweak_pwd) : nullptr);
+  unsigned char *digest = NULL;
+  unsigned int digest_len = 0;
+  utils::digest_message(password, password_length, &digest, &digest_len);
 
-  AES aes = AES(SIZE, ROUNDS, key, tweak);
+  unsigned int key_bytes = key_size / 8; // Convert bits to bytes
+  vector<uint8_t> key(digest, digest + key_bytes);
+  OPENSSL_free(digest); // Free the digest memory
+
+  utils::printVector(key);
+  vector<uint8_t> tweak;
+  if (TWEAK) {
+    unsigned char *tweak_digest = NULL;
+    unsigned int tweak_digest_len = 0;
+    utils::digest_message(tweak_pwd, tweak_length, &tweak_digest,
+                          &tweak_digest_len);
+    tweak.assign(tweak_digest, tweak_digest + key_bytes);
+    OPENSSL_free(tweak_digest); // Free the tweak digest memory
+  }
+
+  AES aes = AES(key_size, n_rounds, key, tweak);
   vector<vector<uint8_t>> cipherBlocks;
 
   for (size_t i = 0; i < all_blocks.size(); i++) {

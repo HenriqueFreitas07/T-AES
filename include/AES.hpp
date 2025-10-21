@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -7,7 +8,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "utils.hpp"
 
 using namespace std;
 using namespace utils;
@@ -18,8 +18,7 @@ using namespace utils;
 // 4x4 matrix = 16 positions = 16 bytes
 // each byte is a state
 
-class AES
-{
+class AES {
   int key_size;
   int n_rounds;
   vector<uint8_t> key;
@@ -29,7 +28,8 @@ class AES
   vector<vector<uint8_t>> round_keys;
 
   // AES S-box (substitution box) for SubBytes operation
-  // inline header definition (C++17). Keep ONLY this, remove any other definition.
+  // inline header definition (C++17). Keep ONLY this, remove any other
+  // definition.
   inline static constexpr uint8_t sbox[256] = {
       0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b,
       0xfe, 0xd7, 0xab, 0x76, 0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0,
@@ -78,28 +78,24 @@ class AES
       0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63,
       0x55, 0x21, 0x0c, 0x7d};
 
-    private:
+private:
   // AES Operations
 
-  void ShiftRows(vector<vector<uint8_t>> &matrix)
-  {
+  void ShiftRows(vector<vector<uint8_t>> &matrix) {
     assert(matrix.size() == 4 && matrix[0].size() == 4);
     // The objective of ShiftRows is to cyclically shift the rows of the state
     // matrix So that each byte is moved to a different position Row 0 is not
     // shifted Row 1 is shifted left by 1 Row 2 is shifted left by 2 Row 3 is
     // shifted left by 3
-    for (size_t r = 1; r < matrix.size(); ++r)
-    {
+    for (size_t r = 1; r < matrix.size(); ++r) {
       rotate(matrix[r].begin(), matrix[r].begin() + r, matrix[r].end());
     }
   }
 
-  void MixColumns(vector<vector<uint8_t>> &matrix)
-  {
+  void MixColumns(vector<vector<uint8_t>> &matrix) {
     assert(matrix.size() == 4 && matrix[0].size() == 4);
 
-    for (int c = 0; c < 4; ++c)
-    {
+    for (int c = 0; c < 4; ++c) {
       uint8_t s0 = matrix[0][c];
       uint8_t s1 = matrix[1][c];
       uint8_t s2 = matrix[2][c];
@@ -119,94 +115,108 @@ class AES
     }
   }
 
-  void SubBytes(vector<vector<uint8_t>> &matrix)
-  {
+  void SubBytes(vector<vector<uint8_t>> &matrix) {
     // here im basically traversing the matrix and substituting each byte using
     // the sbox
-    for (size_t r = 0; r < matrix.size(); ++r)
-    {
-      for (size_t c = 0; c < matrix[r].size(); ++c)
-      {
+    for (size_t r = 0; r < matrix.size(); ++r) {
+      for (size_t c = 0; c < matrix[r].size(); ++c) {
         uint8_t v = matrix[r][c];
         matrix[r][c] = sbox[v];
       }
     }
   }
 
-  void AddRoundKey(vector<vector<uint8_t>> &matrix, const vector<uint8_t> &round_key)
-  {
+  void AddRoundKey(vector<vector<uint8_t>> &matrix,
+                   const vector<uint8_t> &round_key) {
     assert(matrix.size() == 4 && matrix[0].size() == 4);
-    assert(round_key.size() == 16);
+    assert(round_key.size() == 16 || round_key.size() == 24 ||
+           round_key.size() == 32);
 
-    for (size_t r = 0; r < matrix.size(); ++r)
-    {
-      for (size_t c = 0; c < matrix[r].size(); ++c)
-      {
+    for (size_t r = 0; r < matrix.size(); ++r) {
+      for (size_t c = 0; c < matrix[r].size(); ++c) {
         matrix[r][c] ^= round_key[r + 4 * c];
       }
     }
   }
 
-  void KeyExpansion(const vector<uint8_t> &key)
-  {
+  void KeyExpansion(const vector<uint8_t> &key) {
     // key size must be 128-bits or 192-bits or 256-bits long
-    assert(key.size() == 16 || key.size() == 24 || key.size() == 32); // make sure original key is 16 bytes
+    assert(key.size() == 16 || key.size() == 24 || key.size() == 32);
+
+    int Nk = key.size() / 4; // Number of 32-bit words in key (4, 6, or 8)
+    int Nr = n_rounds;       // Number of rounds (10, 12, or 14)
+    int total_words = 4 * (Nr + 1); // Total words needed (44, 52, or 60)
+
+    // Rcon table: round constants
+    const uint8_t Rcon[15] = {0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40,
+                              0x80, 0x1B, 0x36, 0x6C, 0xD8, 0xAB, 0x4D};
+
+    // Create a flat word array (each word is 4 bytes)
+    vector<vector<uint8_t>> words(total_words, vector<uint8_t>(4));
+
+    // Step 1: First Nk words come from the original key
+    for (int i = 0; i < Nk; i++) {
+      words[i][0] = key[4 * i];
+      words[i][1] = key[4 * i + 1];
+      words[i][2] = key[4 * i + 2];
+      words[i][3] = key[4 * i + 3];
+    }
+
+    // Step 2: Generate remaining words
+    for (int i = Nk; i < total_words; i++) {
+      // Start with previous word
+      vector<uint8_t> temp = words[i - 1];
+
+      if (i % Nk == 0) {
+        // Every Nk-th word: RotWord, SubWord, XOR with Rcon
+
+        // RotWord: rotate left by 1 byte
+        uint8_t t = temp[0];
+        temp[0] = temp[1];
+        temp[1] = temp[2];
+        temp[2] = temp[3];
+        temp[3] = t;
+
+        // SubWord: apply S-box to each byte
+        temp[0] = sbox[temp[0]];
+        temp[1] = sbox[temp[1]];
+        temp[2] = sbox[temp[2]];
+        temp[3] = sbox[temp[3]];
+
+        // XOR with Rcon
+        temp[0] ^= Rcon[i / Nk];
+      } else if (Nk > 6 && i % Nk == 4) {
+        // ONLY for AES-256: apply SubWord on every 4th word within a key
+        temp[0] = sbox[temp[0]];
+        temp[1] = sbox[temp[1]];
+        temp[2] = sbox[temp[2]];
+        temp[3] = sbox[temp[3]];
+      }
+
+      // XOR with word from Nk positions back
+      words[i][0] = words[i - Nk][0] ^ temp[0];
+      words[i][1] = words[i - Nk][1] ^ temp[1];
+      words[i][2] = words[i - Nk][2] ^ temp[2];
+      words[i][3] = words[i - Nk][3] ^ temp[3];
+    }
+
+    // Step 3: Group every 4 words into a 16-byte round key
     round_keys.clear();
-    round_keys.push_back(key);
-
-    // 2. Rcon table: round constants used in key expansion
-    // powers of 2 in GF(2^8)
-    const uint8_t Rcon[14] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36, 0x6C, 0xD8, 0xAB, 0x4D};
-
-    for (int round = 1; round <= n_rounds; ++round)
-    {
-      vector<uint8_t> prev_key = round_keys[round - 1]; // previous round key
-      vector<uint8_t> new_key(16);                      // placeholder for new round key
-
-      // ---- Step A: take last 4 bytes of previous key ----
-      uint8_t temp[4];
-      temp[0] = prev_key[12];
-      temp[1] = prev_key[13];
-      temp[2] = prev_key[14];
-      temp[3] = prev_key[15];
-
-      // ---- Step B: rotate left by 1 (RotWord) ----
-      uint8_t t0 = temp[0];
-      temp[0] = temp[1];
-      temp[1] = temp[2];
-      temp[2] = temp[3];
-      temp[3] = t0;
-
-      // ---- Step C: substitute each byte using S-box (SubWord) ----
-      for (int i = 0; i < 4; ++i)
-      {
-        temp[i] = sbox[temp[i]];
+    for (int round = 0; round <= Nr; round++) {
+      vector<uint8_t> round_key(16);
+      for (int word = 0; word < 4; word++) {
+        round_key[4 * word] = words[round * 4 + word][0];
+        round_key[4 * word + 1] = words[round * 4 + word][1];
+        round_key[4 * word + 2] = words[round * 4 + word][2];
+        round_key[4 * word + 3] = words[round * 4 + word][3];
       }
-
-      // ---- Step D: XOR first byte with round constant ----
-      temp[0] ^= Rcon[round - 1];
-
-      // ---- Step E: generate new key ----
-      // first 4 bytes: XOR transformed word with first 4 bytes of previous key
-      for (int i = 0; i < 4; ++i)
-      {
-        new_key[i] = prev_key[i] ^ temp[i];
-      }
-
-      // remaining bytes: each 4-byte block is XORed with corresponding block of previous key
-      for (int i = 4; i < 16; ++i)
-      {
-        new_key[i] = prev_key[i] ^ new_key[i - 4];
-      }
-
-      // ---- Step F: store the new round key ----
-      round_keys.push_back(new_key);
+      round_keys.push_back(round_key);
     }
   }
 
 public:
-  AES(int size, int rounds, vector<uint8_t> key, vector<uint8_t> tweak_key) : key_size(size), n_rounds(rounds), key(key), tweak_key(tweak_key)
-  {
+  AES(int size, int rounds, vector<uint8_t> key, vector<uint8_t> tweak_key)
+      : key_size(size), n_rounds(rounds), key(key), tweak_key(tweak_key) {
     // Convert key string to vector<uint8_t> and perform key expansion
     // Pad or truncate to 16 bytes for AES-128
     KeyExpansion(key);
@@ -215,28 +225,23 @@ public:
   /// @brief Gets the raw block
   /// @param block vector<uint8_t>
   /// @return Returns the encrypted block after transformations
-  vector<uint8_t> encrypt_block(vector<uint8_t> block)
-  {
+  vector<uint8_t> encrypt_block(vector<uint8_t> block) {
     // Ensure block is exactly 16 bytes, just for safety
-    if (block.size() != 16)
-    {
+    if (block.size() != 16) {
       throw invalid_argument("Block must be exactly 16 bytes");
     }
 
     // Convert 16 bytes to 4x4 matrix (AES state)
     vector<vector<uint8_t>> matrix(4, vector<uint8_t>(4));
-    for (int i = 0; i < 4; i++)
-    {
-      for (int j = 0; j < 4; j++)
-      {
+    for (int i = 0; i < 4; i++) {
+      for (int j = 0; j < 4; j++) {
         matrix[i][j] = block[i + 4 * j];
       }
     }
 
     AddRoundKey(matrix, round_keys[0]); // initial round key
 
-    for (int round = 1; round <= 9; ++round)
-    {
+    for (int round = 1; round < n_rounds; ++round) {
       SubBytes(matrix);
       ShiftRows(matrix);
       MixColumns(matrix);
@@ -245,14 +250,12 @@ public:
     // final round (no MixColumns)
     SubBytes(matrix);
     ShiftRows(matrix);
-    AddRoundKey(matrix, round_keys[10]);
+    AddRoundKey(matrix, round_keys[n_rounds]);
 
     // Convert matrix back to 16 bytes
     vector<uint8_t> result(16);
-    for (int i = 0; i < 4; i++)
-    {
-      for (int j = 0; j < 4; j++)
-      {
+    for (int i = 0; i < 4; i++) {
+      for (int j = 0; j < 4; j++) {
         result[i + 4 * j] = matrix[i][j];
       }
     }
@@ -265,28 +268,24 @@ public:
   /// @brief
   /// @param block
   /// @return
-  vector<uint8_t> decrypt_block(vector<uint8_t> block)
-  {
-    if (block.size() != 16)
-    {
+  vector<uint8_t> decrypt_block(vector<uint8_t> block) {
+    if (block.size() != 16) {
       throw invalid_argument("Block must be exactly 16 bytes");
     }
 
     // convert 16 bytes to 4x4 matrix (AES state)
     vector<vector<uint8_t>> matrix(4, vector<uint8_t>(4));
-    for (int i = 0; i < 4; i++)
-    {
-      for (int j = 0; j < 4; j++)
-      {
+    for (int i = 0; i < 4; i++) {
+      for (int j = 0; j < 4; j++) {
         matrix[i][j] = block[i + 4 * j];
       }
     }
 
-    // initial add round key will be the same? or we go from the lasound and do the opposite
+    // initial add round key will be the same? or we go from the lasound and do
+    // the opposite
     AddRoundKey(matrix, round_keys[n_rounds]); // initial round key
 
-    for (int round = n_rounds - 1; round >= 1; --round)
-    {
+    for (int round = n_rounds - 1; round >= 1; --round) {
       InvShiftRows(matrix);
       InvSubBytes(matrix);
       AddRoundKey(matrix, round_keys[round]);
@@ -300,44 +299,35 @@ public:
 
     // covnert matrix back to 16 btyes
     vector<uint8_t> result(16);
-    for (int i = 0; i < 4; i++)
-    {
-      for (int j = 0; j < 4; j++)
-      {
+    for (int i = 0; i < 4; i++) {
+      for (int j = 0; j < 4; j++) {
         result[i + 4 * j] = matrix[i][j];
       }
     }
     return result;
   }
 
-  void InvShiftRows(vector<vector<uint8_t>> &matrix)
-  {
+  void InvShiftRows(vector<vector<uint8_t>> &matrix) {
     assert(matrix.size() == 4 && matrix[0].size() == 4);
     // Inverse of ShiftRows: cyclically shift rows to the right
-    for (size_t r = 1; r < matrix.size(); ++r)
-    {
+    for (size_t r = 1; r < matrix.size(); ++r) {
       rotate(matrix[r].rbegin(), matrix[r].rbegin() + r, matrix[r].rend());
     }
   }
 
-  void InvSubBytes(vector<vector<uint8_t>> &matrix)
-  {
+  void InvSubBytes(vector<vector<uint8_t>> &matrix) {
     // Inverse of SubBytes: substitute each byte using inverse S-box
-    for (size_t r = 0; r < matrix.size(); ++r)
-    {
-      for (size_t c = 0; c < matrix[r].size(); ++c)
-      {
+    for (size_t r = 0; r < matrix.size(); ++r) {
+      for (size_t c = 0; c < matrix[r].size(); ++c) {
         uint8_t v = matrix[r][c];
         matrix[r][c] = inv_sbox[v];
       }
     }
   }
-  void InvMixColumns(vector<vector<uint8_t>> &matrix)
-  {
+  void InvMixColumns(vector<vector<uint8_t>> &matrix) {
     // standard AES inverse MixColumns
     assert(matrix.size() == 4 && matrix[0].size() == 4);
-    for (int c = 0; c < 4; ++c)
-    {
+    for (int c = 0; c < 4; ++c) {
       uint8_t s0 = matrix[0][c];
       uint8_t s1 = matrix[1][c];
       uint8_t s2 = matrix[2][c];
@@ -351,11 +341,9 @@ public:
   }
 
   // helper for multiplication in GF(2^8)
-  uint8_t GMul(uint8_t a, uint8_t b)
-  {
+  uint8_t GMul(uint8_t a, uint8_t b) {
     uint8_t p = 0;
-    for (int i = 0; i < 8; i++)
-    {
+    for (int i = 0; i < 8; i++) {
       if (b & 1)
         p ^= a;
       bool hi_bit_set = (a & 0x80);

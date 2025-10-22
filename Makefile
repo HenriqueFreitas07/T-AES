@@ -31,6 +31,14 @@ $(BIN_DIR)/encrypt: $(BUILD_DIR)/encrypt.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "Encrypt program built: $(BIN_DIR)/encrypt"
 
+# Decrypt program target
+decrypt: $(BIN_DIR)/decrypt
+
+$(BIN_DIR)/decrypt: $(BUILD_DIR)/decrypt.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@echo "Decrypt program built: $(BIN_DIR)/decrypt"
+
 # Verify AES program target
 verify: $(BIN_DIR)/verify_aes
 

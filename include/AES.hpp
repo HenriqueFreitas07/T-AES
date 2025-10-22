@@ -79,6 +79,59 @@ class AES {
       0x55, 0x21, 0x0c, 0x7d};
 
 private:
+    
+// tweak operations for encryption and decryption
+
+
+    // it takes in a round key and a tweak and adds them byte by byte with carry
+    // it returns a vector because the result is a new round key
+  vector<uint8_t> add_tweak(const vector<uint8_t>& round_key, const vector<uint8_t>& tweak) {
+    assert(round_key.size() == 16 && tweak.size() == 16);
+    vector<uint8_t> result(16);
+    uint16_t carry = 0;
+    for (int i = 15; i >= 0; --i) {
+        uint16_t sum = round_key[i] + tweak[i] + carry;
+        result[i] = sum & 0xFF;
+        carry = sum >> 8;
+    }
+    return result;
+}
+
+// reverse of add_tweak
+vector<uint8_t> sub_tweak(const vector<uint8_t>& round_key, const vector<uint8_t>& tweak) {
+    assert(round_key.size() == 16 && tweak.size() == 16);
+    vector<uint8_t> result(16);
+    int16_t borrow = 0;
+    for (int i = 15; i >= 0; --i) {
+        int16_t diff = round_key[i] - tweak[i] - borrow;
+        if (diff < 0) {
+            diff += 256;
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
+        result[i] = diff & 0xFF;
+    }
+    return result;
+}
+
+// goes to utils?
+// inline void increment_tweak(vector<uint8_t>& tweak) {
+//     assert(tweak.size() == 16);
+//     for (int i = 15; i >= 0; --i) {
+//         if (++tweak[i] != 0) break; // stop if no carry
+//     }
+// }
+
+
+int get_tweak_round() const {
+  if (key_size == 128) return 5;
+  else if (key_size == 192) return 6; //67
+  else if (key_size == 256) return 7; // 67
+  else throw invalid_argument("Invalid key size for tweak rounds");
+}
+
+
   // AES Operations
 
   void ShiftRows(vector<vector<uint8_t>> &matrix) {
@@ -241,12 +294,24 @@ public:
 
     AddRoundKey(matrix, round_keys[0]); // initial round key
 
+
+    // here we add the tweak 
+    int tweak_round = get_tweak_round();
+
     for (int round = 1; round < n_rounds; ++round) {
       SubBytes(matrix);
       ShiftRows(matrix);
       MixColumns(matrix);
-      AddRoundKey(matrix, round_keys[round]);
+
+      // add tweak at specified round
+      if (!tweak_key.empty() && round == tweak_round) {
+        AddRoundKey(matrix, add_tweak(round_keys[round], tweak_key));
+      } else {
+        AddRoundKey(matrix, round_keys[round]);
+      }
     }
+    // #############################
+
     // final round (no MixColumns)
     SubBytes(matrix);
     ShiftRows(matrix);
@@ -285,10 +350,20 @@ public:
     // the opposite
     AddRoundKey(matrix, round_keys[n_rounds]); // initial round key
 
+
+    // here we subtract the tweak at the specified round
+    int tweak_round = get_tweak_round();
+
     for (int round = n_rounds - 1; round >= 1; --round) {
       InvShiftRows(matrix);
       InvSubBytes(matrix);
-      AddRoundKey(matrix, round_keys[round]);
+
+      // tweak subtraction at specified round
+      if (!tweak_key.empty() && round == tweak_round) {
+        AddRoundKey(matrix, sub_tweak(round_keys[round], tweak_key));
+      } else {
+        AddRoundKey(matrix, round_keys[round]);
+      }
       InvMixColumns(matrix);
     }
 

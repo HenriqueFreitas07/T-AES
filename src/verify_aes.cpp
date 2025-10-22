@@ -100,17 +100,31 @@ int main() {
         // Compare
         bool testPassed = (ciphertext == expectedCiphertext);
         if (testPassed) {
-            cout << "  ✓ PASSED\n";
+            cout << "  ✓ ENCRYPTION PASSED\n";
             passed++;
         } else {
-            cout << "  ✗ FAILED\n";
+            cout << "  ✗ ENCRYPTION FAILED\n";
             failed++;
         }
+
+        // Now test decryption
+        vector<uint8_t> decrypted = aes.decrypt_block(ciphertext);
+        string decryptedHex = bytesToHex(decrypted);
+        cout << "  Decrypted: " << decryptedHex << "\n";
+        cout << "  Expected:  " << test.plaintext << "\n";
+        bool decryptPassed = (decrypted == plaintext);
+        if (decryptPassed) {
+            cout << "  ✓ DECRYPTION PASSED\n";
+        } else {
+            cout << "  ✗ DECRYPTION FAILED\n";
+            failed++;
+        }
+
         cout << "\n";
     }
 
     cout << "==========================================\n";
-    cout << "Results: " << passed << " passed, " << failed << " failed\n";
+    cout << "Results: " << passed << " encryption passed, " << failed << " failed (encryption or decryption)\n";
 
     return (failed == 0) ? 0 : 1;
 }

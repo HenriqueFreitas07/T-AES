@@ -83,38 +83,23 @@ private:
 // tweak operations for encryption and decryption
 
 
-    // it takes in a round key and a tweak and adds them byte by byte with carry
+    // XOR the round key with the tweak - this is the standard approach for AES tweaks
     // it returns a vector because the result is a new round key
   vector<uint8_t> add_tweak(const vector<uint8_t>& round_key, const vector<uint8_t>& tweak) {
     assert(round_key.size() == 16 && tweak.size() == 16);
     vector<uint8_t> result(16);
-    uint16_t carry = 0;
-    for (int i = 15; i >= 0; --i) {
-        uint16_t sum = round_key[i] + tweak[i] + carry;
-        result[i] = sum & 0xFF;
-        carry = sum >> 8;
+    for (int i = 0; i < 16; ++i) {
+        result[i] = round_key[i] ^ tweak[i];
     }
     return result;
 }
 
-// reverse of add_tweak
+// In AES, XOR is its own inverse, so "subtracting" a tweak is the same as adding it
 vector<uint8_t> sub_tweak(const vector<uint8_t>& round_key, const vector<uint8_t>& tweak) {
     assert(round_key.size() == 16 && tweak.size() == 16);
     vector<uint8_t> result(16);
-    int borrow = 0;  // ← signed type
-    
-    for (int i = 15; i >= 0; --i) {
-        int diff = round_key[i] - tweak[i] - borrow;  // ← signed type
-        
-        if (diff < 0) {  
-            diff += 256;
-            borrow = 1;
-        } else {
-            borrow = 0;
-        }
-        // negative check wasnt working correctly
-
-        result[i] = diff & 0xFF;
+    for (int i = 0; i < 16; ++i) {
+        result[i] = round_key[i] ^ tweak[i];  // XOR is its own inverse
     }
     return result;
 }
@@ -129,9 +114,13 @@ vector<uint8_t> sub_tweak(const vector<uint8_t>& round_key, const vector<uint8_t
 
 
 int get_tweak_round() const {
+  // Apply tweak in the middle rounds for better security
+  // AES-128: 10 rounds (0-10), apply tweak at round 5
+  // AES-192: 12 rounds (0-12), apply tweak at round 6  
+  // AES-256: 14 rounds (0-14), apply tweak at round 7
   if (key_size == 128) return 5;
-  else if (key_size == 192) return 6; //67
-  else if (key_size == 256) return 7; // 67
+  else if (key_size == 192) return 6;
+  else if (key_size == 256) return 7;
   else throw invalid_argument("Invalid key size for tweak rounds");
 }
 
@@ -374,12 +363,13 @@ public:
       InvShiftRows(matrix);
       InvSubBytes(matrix);
 
-      // tweak subtraction at specified round
+      // tweak subtraction at specified round (apply before InvMixColumns to match encryption order)
       if (!tweak_key.empty() && round == tweak_round) {
         AddRoundKey(matrix, sub_tweak(round_keys[round], tweak_key));
       } else {
         AddRoundKey(matrix, round_keys[round]);
       }
+      
       InvMixColumns(matrix);
     }
 

@@ -101,15 +101,19 @@ private:
 vector<uint8_t> sub_tweak(const vector<uint8_t>& round_key, const vector<uint8_t>& tweak) {
     assert(round_key.size() == 16 && tweak.size() == 16);
     vector<uint8_t> result(16);
-    int16_t borrow = 0;
+    int borrow = 0;  // ← signed type
+    
     for (int i = 15; i >= 0; --i) {
-        int16_t diff = round_key[i] - tweak[i] - borrow;
-        if (diff < 0) {
+        int diff = round_key[i] - tweak[i] - borrow;  // ← signed type
+        
+        if (diff < 0) {  
             diff += 256;
             borrow = 1;
         } else {
             borrow = 0;
         }
+        // negative check wasnt working correctly
+
         result[i] = diff & 0xFF;
     }
     return result;
@@ -179,18 +183,30 @@ int get_tweak_round() const {
     }
   }
 
-  void AddRoundKey(vector<vector<uint8_t>> &matrix,
-                   const vector<uint8_t> &round_key) {
-    assert(matrix.size() == 4 && matrix[0].size() == 4);
-    assert(round_key.size() == 16 || round_key.size() == 24 ||
-           round_key.size() == 32);
+  // void AddRoundKey(vector<vector<uint8_t>> &matrix,
+  //                  const vector<uint8_t> &round_key) {
+  //   assert(matrix.size() == 4 && matrix[0].size() == 4);
+  //   assert(round_key.size() == 16 || round_key.size() == 24 ||
+  //          round_key.size() == 32);
 
+  //   for (size_t r = 0; r < matrix.size(); ++r) {
+  //     for (size_t c = 0; c < matrix[r].size(); ++c) {
+  //       matrix[r][c] ^= round_key[r + 4 * c];
+  //     }
+  //   }
+  // }
+
+  void AddRoundKey(vector<vector<uint8_t>> &matrix,
+                 const vector<uint8_t> &round_key) {
+    assert(matrix.size() == 4 && matrix[0].size() == 4);
+    assert(round_key.size() == 16); // Only 16 bytes allowed
+    
     for (size_t r = 0; r < matrix.size(); ++r) {
       for (size_t c = 0; c < matrix[r].size(); ++c) {
         matrix[r][c] ^= round_key[r + 4 * c];
       }
     }
-  }
+}
 
   void KeyExpansion(const vector<uint8_t> &key) {
     // key size must be 128-bits or 192-bits or 256-bits long

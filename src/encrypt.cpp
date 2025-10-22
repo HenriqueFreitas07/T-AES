@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
     unsigned int tweak_digest_len = 0;
     utils::digest_message(tweak_pwd, tweak_length, &tweak_digest,
                           &tweak_digest_len);
-    tweak.assign(tweak_digest, tweak_digest + key_bytes);
+    tweak.assign(tweak_digest, tweak_digest + 16); // same mistake we were doin g before
     OPENSSL_free(tweak_digest); // Free the tweak digest memory
   }
 

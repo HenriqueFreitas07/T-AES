@@ -10,6 +10,17 @@
 
 namespace utils {
 
+  /// @brief Increment the tweak value
+  /// @param tweak The tweak value to increment
+  /// @note The tweak is treated as a 128-bit big-endian integer
+  void increment_tweak(std::vector<uint8_t> &tweak) {
+    assert(tweak.size() == 16);
+    for (int i = 15; i >= 0; --i) {
+      if (++tweak[i] != 0)
+        break; // stop if no carry
+    }
+  }
+
 /// @brief Conversion from char to uint8_t for encryption operations
 /// @param block Input character block
 /// @return 128 bits of 16 bytes of 8 bit integers
@@ -67,6 +78,7 @@ void digest_message(const unsigned char *message, size_t message_len,
 
   EVP_MD_CTX_free(mdctx);
 }
+
 
 } // namespace utils
 

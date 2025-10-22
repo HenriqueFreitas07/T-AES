@@ -85,7 +85,8 @@ int main(int argc, char *argv[]) {
   vector<uint8_t> key(digest, digest + key_bytes);
   OPENSSL_free(digest); // Free the digest memory
 
-  utils::printVector(key);
+  // utils::printVector(key); // COMMENT THIS OUT
+
   vector<uint8_t> tweak;
   if (TWEAK) {
     unsigned char *tweak_digest = NULL;
@@ -97,21 +98,53 @@ int main(int argc, char *argv[]) {
   }
 
   AES aes = AES(key_size, n_rounds, key, tweak);
+
+  // tweak part added
   vector<vector<uint8_t>> cipherBlocks;
+  vector<uint8_t> tweak_for_block = tweak;
 
   for (size_t i = 0; i < all_blocks.size(); i++) {
-
     vector<uint8_t> current_block = all_blocks.at(i);
-    cout << "Encrypting the following block (size " << current_block.size()
-         << " bytes)" << endl;
-    utils::printVector(all_blocks[i]);
+
+    AES aes(key_size, n_rounds, key, tweak_for_block);
+
+    // cout << "Encrypting the following block (size " << current_block.size()
+    //      << " bytes)" << endl; // COMMENT THIS OUT
+    // utils::printVector(current_block); // COMMENT THIS OUT
+
     cipherBlocks.push_back(aes.encrypt_block(current_block));
+
+    if (TWEAK) {
+        utils::increment_tweak(tweak_for_block);
+    }
   }
 
-  cout << endl << "Encrypted bytes:" << endl;
+  // cout << endl << "Encrypted bytes:" << endl; // COMMENT THIS OUT
   for (size_t i = 0; i < cipherBlocks.size(); i++) {
-    utils::printVector(cipherBlocks[i]);
+    // utils::printVector(cipherBlocks[i]); // COMMENT THIS OUT
+    cout.write(reinterpret_cast<const char*>(cipherBlocks[i].data()), cipherBlocks[i].size());
   }
 
   return 0;
 }
+
+// TODO: Do ciphertext stealing next, not padding
+
+// To test without tweak - normal AES-ECB
+// # Encrypt
+// ./encrypt 128 mypassword < plaintext.bin > ciphertext.bin
+
+// # Decrypt
+// ./decrypt 128 mypassword < ciphertext.bin > decrypted.bin
+
+// To test with tweak - T-AES counter mode
+// # Encrypt
+// ./encrypt 128 mypassword mytweak < plaintext.bin > ciphertext.bin
+
+// # Decrypt
+// ./decrypt 128 mypassword mytweak < ciphertext.bin > decrypted.bin
+
+// Use to check if fies are identical
+// diff plaintext.bin decrypted.bin
+// # or
+// cmp plaintext.bin decrypted.bin

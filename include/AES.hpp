@@ -85,7 +85,7 @@ private:
 
     // XOR the round key with the tweak - this is the standard approach for AES tweaks
     // it returns a vector because the result is a new round key
-  vector<uint8_t> add_tweak(const vector<uint8_t>& round_key, const vector<uint8_t>& tweak) {
+  vector<uint8_t> xor_tweak(const vector<uint8_t>& round_key, const vector<uint8_t>& tweak) {
     assert(round_key.size() == 16 && tweak.size() == 16);
     vector<uint8_t> result(16);
     for (int i = 0; i < 16; ++i) {
@@ -94,15 +94,6 @@ private:
     return result;
 }
 
-// In AES, XOR is its own inverse, so "subtracting" a tweak is the same as adding it
-vector<uint8_t> sub_tweak(const vector<uint8_t>& round_key, const vector<uint8_t>& tweak) {
-    assert(round_key.size() == 16 && tweak.size() == 16);
-    vector<uint8_t> result(16);
-    for (int i = 0; i < 16; ++i) {
-        result[i] = round_key[i] ^ tweak[i];  // XOR is its own inverse
-    }
-    return result;
-}
 
 // goes to utils?
 // inline void increment_tweak(vector<uint8_t>& tweak) {
@@ -172,18 +163,6 @@ int get_tweak_round() const {
     }
   }
 
-  // void AddRoundKey(vector<vector<uint8_t>> &matrix,
-  //                  const vector<uint8_t> &round_key) {
-  //   assert(matrix.size() == 4 && matrix[0].size() == 4);
-  //   assert(round_key.size() == 16 || round_key.size() == 24 ||
-  //          round_key.size() == 32);
-
-  //   for (size_t r = 0; r < matrix.size(); ++r) {
-  //     for (size_t c = 0; c < matrix[r].size(); ++c) {
-  //       matrix[r][c] ^= round_key[r + 4 * c];
-  //     }
-  //   }
-  // }
 
   void AddRoundKey(vector<vector<uint8_t>> &matrix,
                  const vector<uint8_t> &round_key) {
@@ -310,7 +289,7 @@ public:
 
       // add tweak at specified round
       if (!tweak_key.empty() && round == tweak_round) {
-        AddRoundKey(matrix, add_tweak(round_keys[round], tweak_key));
+        AddRoundKey(matrix, xor_tweak(round_keys[round], tweak_key));
       } else {
         AddRoundKey(matrix, round_keys[round]);
       }
@@ -365,7 +344,7 @@ public:
 
       // tweak subtraction at specified round (apply before InvMixColumns to match encryption order)
       if (!tweak_key.empty() && round == tweak_round) {
-        AddRoundKey(matrix, sub_tweak(round_keys[round], tweak_key));
+        AddRoundKey(matrix, xor_tweak(round_keys[round], tweak_key));
       } else {
         AddRoundKey(matrix, round_keys[round]);
       }

@@ -104,6 +104,28 @@ int main(int argc, char *argv[]) {
 
     AES aes(key_size, n_rounds, key, tweak_for_block);
 
+    // ! When decrypting with ciphertext stealing, we have to do the following:
+    // Dn = Decrypt (K, Cn−1). Decrypt Cn−1 to create Dn. This undoes step 4 of the encryption process.
+    // En−1 = Cn || Tail (Dn, B−M). Pad Cn with the extracted ciphertext in the tail end of Dn (placed there in step 3 of the ECB encryption process).
+    // Pn = Head (Dn, M). Select the first M bits of Dn to create Pn. As described in step 3 of the ECB encryption process, the first M bits of Dn contain Pn. We queue this last (possibly partial) block for eventual output.
+    // Pn−1 = Decrypt (K, En−1). Decrypt En−1 to create Pn−1. This reverses encryption step 1.
+
+    if (i > 0) {
+        if (current_block.size() < 16) {
+            vector<uint8_t> previous_block = all_blocks.at(i - 1);
+            // ciphertext stealing
+            size_t steal_size = 16 - current_block.size();
+            // take last steal_size bytes from previous_block
+            vector<uint8_t> stolen_bytes(previous_block.end() - steal_size, previous_block.end());
+            // append stolen bytes to current_block
+            current_block.insert(current_block.end(), stolen_bytes.begin(), stolen_bytes.end());
+            // resize previous_block
+            previous_block.resize(previous_block.size() - steal_size);
+            // update the previous block in all_blocks
+            all_blocks.at(i - 1) = previous_block;
+        }
+    }
+
     // Decrypt block
     vector<uint8_t> plain = aes.decrypt_block(current_block);
     plainBlocks.push_back(plain);

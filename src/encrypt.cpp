@@ -106,11 +106,38 @@ int main(int argc, char *argv[]) {
   for (size_t i = 0; i < all_blocks.size(); i++) {
     vector<uint8_t> current_block = all_blocks.at(i);
 
+
+
+    // are we supposed to rotate?
+    // if it isnt the first block, get the previous one, if the size of this block is not 16, meaning its the last block
+    if (current_block != all_blocks.front()) {
+        if (current_block.size() < 16) {
+            vector<uint8_t> previous_block = all_blocks.at(i - 1);
+            // ciphertext stealing
+            size_t steal_size = 16 - current_block.size();
+            // take last steal_size bytes from previous_block
+            vector<uint8_t> stolen_bytes(previous_block.end() - steal_size, previous_block.end
+());
+            // append stolen bytes to current_block
+            current_block.insert(current_block.end(), stolen_bytes.begin(), stolen_bytes.end());
+            // resize previous_block
+            previous_block.resize(previous_block.size() - steal_size);
+            // update the previous block in all_blocks
+            all_blocks.at(i - 1) = previous_block;
+        }
+    }
+
     AES aes(key_size, n_rounds, key, tweak_for_block);
 
     // cout << "Encrypting the following block (size " << current_block.size()
     //      << " bytes)" << endl; // COMMENT THIS OUT
     // utils::printVector(current_block); // COMMENT THIS OUT
+
+    // // test alteration for now 
+    // if (current_block.size() < 16) {
+    //   // padding with zeros
+    //   current_block.resize(16, 0x00);
+    // }
 
     cipherBlocks.push_back(aes.encrypt_block(current_block));
 

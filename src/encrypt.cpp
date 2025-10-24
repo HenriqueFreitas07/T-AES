@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <sys/types.h>
 #include <vector>
 
 using namespace std;
@@ -105,52 +106,24 @@ int main(int argc, char *argv[]) {
 
   for (size_t i = 0; i < all_blocks.size(); i++) {
     vector<uint8_t> current_block = all_blocks.at(i);
+    vector<uint8_t> ciphertext_block;
+    if (current_block.size() < 16) {
+      // ciphertext stealing
+      size_t steal_size = 16 - current_block.size();
+      vector<uint8_t> previous_encrypted_block= cipherBlocks.at(i-1);
+      vector<uint8_t> cipher_to_append(previous_encrypted_block.end() - steal_size , previous_encrypted_block.end());
 
-    // padding if it only exists 1 block and its less than 16 bytes
-    // ? which kind of padding should we do?  
-    // ? just add zeros? 
-    // ?  should we also do pbkdf2 instead of just hashing, or sha256
-    // ?  should we also do key stretching?
-    // ? padding attention in decrypt?
-    // if (all_blocks.size() == 1 && current_block.size() < 16) {
-    //     size_t original_size = current_block.size();
-    //     // PKCS#7 padding
-    //     uint8_t pad_value = 16 - original_size;
-    //     current_block.resize(16, pad_value);
-    // }
-
-    // are we supposed to rotate?
-    // if it isnt the first block, get the previous one, if the size of this block is not 16, meaning its the last block
-    if (current_block != all_blocks.front()) {
-        if (current_block.size() < 16) {
-            vector<uint8_t> previous_block = all_blocks.at(i - 1);
-            // ciphertext stealing
-            size_t steal_size = 16 - current_block.size();
-            // take last steal_size bytes from previous_block
-            vector<uint8_t> stolen_bytes(previous_block.end() - steal_size, previous_block.end
-());
-            // append stolen bytes to current_block
-            current_block.insert(current_block.end(), stolen_bytes.begin(), stolen_bytes.end());
-            // resize previous_block
-            previous_block.resize(previous_block.size() - steal_size);
-            // update the previous block in all_blocks
-            all_blocks.at(i - 1) = previous_block;
-        }
+      // append the tail of the cipher text to the current unaligned block of plaintext
+      current_block.insert(current_block.end(), cipher_to_append.begin(),cipher_to_append.end());
+      //new last block (leftover of the ciphertext of the previous block n-1 )
+      vector<uint8_t> new_last_block(previous_encrypted_block.begin(),previous_encrypted_block.end()-steal_size);
+      ciphertext_block=aes.encrypt_block(current_block);
+      cipherBlocks.back()=new_last_block;
+    }else {
+      ciphertext_block=aes.encrypt_block(current_block);
     }
 
-    AES aes(key_size, n_rounds, key, tweak_for_block);
-
-    // cout << "Encrypting the following block (size " << current_block.size()
-    //      << " bytes)" << endl; // COMMENT THIS OUT
-    // utils::printVector(current_block); // COMMENT THIS OUT
-
-    // // test alteration for now 
-    // if (current_block.size() < 16) {
-    //   // padding with zeros
-    //   current_block.resize(16, 0x00);
-    // }
-
-    cipherBlocks.push_back(aes.encrypt_block(current_block));
+    cipherBlocks.push_back(ciphertext_block);
 
     if (TWEAK) {
         utils::increment_tweak(tweak_for_block);

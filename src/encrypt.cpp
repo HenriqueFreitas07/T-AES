@@ -106,7 +106,18 @@ int main(int argc, char *argv[]) {
   for (size_t i = 0; i < all_blocks.size(); i++) {
     vector<uint8_t> current_block = all_blocks.at(i);
 
-
+    // padding if it only exists 1 block and its less than 16 bytes
+    // ? which kind of padding should we do?  
+    // ? just add zeros? 
+    // ?  should we also do pbkdf2 instead of just hashing, or sha256
+    // ?  should we also do key stretching?
+    // ? padding attention in decrypt?
+    // if (all_blocks.size() == 1 && current_block.size() < 16) {
+    //     size_t original_size = current_block.size();
+    //     // PKCS#7 padding
+    //     uint8_t pad_value = 16 - original_size;
+    //     current_block.resize(16, pad_value);
+    // }
 
     // are we supposed to rotate?
     // if it isnt the first block, get the previous one, if the size of this block is not 16, meaning its the last block

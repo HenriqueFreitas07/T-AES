@@ -95,43 +95,78 @@ int main(int argc, char *argv[]) {
     OPENSSL_free(tweak_digest); // Free the tweak digest memory
   }
 
-  // tweak part added
+  AES aes = AES(key_size, n_rounds, key, tweak);
+
+  // Ciphertext stealing decryption
   vector<vector<uint8_t>> plainBlocks;
   vector<uint8_t> tweak_for_block = tweak;
 
   for (size_t i = 0; i < all_blocks.size(); i++) {
     vector<uint8_t> current_block = all_blocks.at(i);
+    vector<uint8_t> plaintext_block;
 
-    AES aes(key_size, n_rounds, key, tweak_for_block);
-
-    // ! When decrypting with ciphertext stealing, we have to do the following:
-    // Dn = Decrypt (K, Cn−1). Decrypt Cn−1 to create Dn. This undoes step 4 of the encryption process.
-    // En−1 = Cn || Tail (Dn, B−M). Pad Cn with the extracted ciphertext in the tail end of Dn (placed there in step 3 of the ECB encryption process).
-    // Pn = Head (Dn, M). Select the first M bits of Dn to create Pn. As described in step 3 of the ECB encryption process, the first M bits of Dn contain Pn. We queue this last (possibly partial) block for eventual output.
-    // Pn−1 = Decrypt (K, En−1). Decrypt En−1 to create Pn−1. This reverses encryption step 1.
-
-    if (i > 0) {
-        if (current_block.size() < 16) {
-            vector<uint8_t> previous_block = all_blocks.at(i - 1);
-            // ciphertext stealing
-            size_t steal_size = 16 - current_block.size();
-            // take last steal_size bytes from previous_block
-            vector<uint8_t> stolen_bytes(previous_block.end() - steal_size, previous_block.end());
-            // append stolen bytes to current_block
-            current_block.insert(current_block.end(), stolen_bytes.begin(), stolen_bytes.end());
-            // resize previous_block
-            previous_block.resize(previous_block.size() - steal_size);
-            // update the previous block in all_blocks
-            all_blocks.at(i - 1) = previous_block;
-        }
+    // Check if NEXT block exists and is partial (skip normal decrypt of current)
+    if (i + 1 < all_blocks.size() && all_blocks.at(i + 1).size() < 16) {
+      // Current block contains merged data, will handle in next iteration
+      // Just increment tweak and continue
+      if (TWEAK) {
+        utils::increment_tweak(tweak_for_block);
+      }
+      continue;
     }
 
-    // Decrypt block
-    vector<uint8_t> plain = aes.decrypt_block(current_block);
-    plainBlocks.push_back(plain);
+    // Check if THIS is the last block and it's partial (ciphertext stealing)
+    if (current_block.size() < 16 && i == all_blocks.size() - 1) {
+      // Ciphertext stealing decryption with merged blocks:
+      // - previous block contains: truncated_C(n-1) + head_of_Cn
+      // - current block contains: tail_of_Cn
+      size_t partial_size = current_block.size();
+      size_t steal_size = 16 - partial_size;
 
-    if (TWEAK) {
+      // Get the previous block (contains merged data)
+      vector<uint8_t> previous_block = all_blocks.at(i - 1);
+
+      // Reconstruct full Cn from: last steal_size bytes of previous + current
+      vector<uint8_t> full_cn(previous_block.end() - steal_size,
+                              previous_block.end());
+      full_cn.insert(full_cn.end(), current_block.begin(), current_block.end());
+
+      // Step 1: Decrypt Cn to get (Pn || tail of original C(n-1))
+      vector<uint8_t> decrypted_cn = aes.decrypt_block(full_cn);
+
+      // Step 2: Extract stolen bytes from tail of decrypted Cn
+      vector<uint8_t> stolen_bytes(decrypted_cn.end() - steal_size,
+                                    decrypted_cn.end());
+
+      // Step 3: Reconstruct full C(n-1) from first partial_size bytes of previous + stolen
+      vector<uint8_t> truncated_cn1(previous_block.begin(),
+                                     previous_block.begin() + partial_size);
+      truncated_cn1.insert(truncated_cn1.end(), stolen_bytes.begin(),
+                           stolen_bytes.end());
+
+      // Step 4: Decrypt full C(n-1) to get P(n-1)
+      vector<uint8_t> pn1 = aes.decrypt_block(truncated_cn1);
+
+      // Step 5: Extract Pn (first partial_size bytes of decrypted Cn)
+      vector<uint8_t> pn(decrypted_cn.begin(),
+                         decrypted_cn.begin() + partial_size);
+
+      // Add both plaintext blocks
+      plainBlocks.push_back(pn1);
+      plainBlocks.push_back(pn);
+
+      if (TWEAK) {
         utils::increment_tweak(tweak_for_block);
+        utils::increment_tweak(tweak_for_block);
+      }
+    } else {
+      // Normal full block decryption
+      plaintext_block = aes.decrypt_block(current_block);
+      plainBlocks.push_back(plaintext_block);
+
+      if (TWEAK) {
+        utils::increment_tweak(tweak_for_block);
+      }
     }
   }
 

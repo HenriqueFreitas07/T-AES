@@ -94,8 +94,9 @@ int main(int argc, char *argv[]) {
     unsigned int tweak_digest_len = 0;
     utils::digest_message(tweak_pwd, tweak_length, &tweak_digest,
                           &tweak_digest_len);
-    tweak.assign(tweak_digest, tweak_digest + 16); // same mistake we were doin g before
-    OPENSSL_free(tweak_digest); // Free the tweak digest memory
+    tweak.assign(tweak_digest,
+                 tweak_digest + 16); // same mistake we were doin g before
+    OPENSSL_free(tweak_digest);      // Free the tweak digest memory
   }
 
   AES aes = AES(key_size, n_rounds, key, tweak);
@@ -110,30 +111,37 @@ int main(int argc, char *argv[]) {
     if (current_block.size() < 16) {
       // ciphertext stealing
       size_t steal_size = 16 - current_block.size();
-      vector<uint8_t> previous_encrypted_block= cipherBlocks.at(i-1);
-      vector<uint8_t> cipher_to_append(previous_encrypted_block.end() - steal_size , previous_encrypted_block.end());
+      vector<uint8_t> previous_encrypted_block = cipherBlocks.at(i - 1);
+      // this is the last bytes that are copied from the cipher of the Cn-1 block to append to the plaintext of the Pn block
+      vector<uint8_t> cipher_to_append(previous_encrypted_block.end() -
+                                           steal_size,
+                                       previous_encrypted_block.end());
 
-      // append the tail of the cipher text to the current unaligned block of plaintext
-      current_block.insert(current_block.end(), cipher_to_append.begin(),cipher_to_append.end());
-      //new last block (leftover of the ciphertext of the previous block n-1 )
-      vector<uint8_t> new_last_block(previous_encrypted_block.begin(),previous_encrypted_block.end()-steal_size);
-      ciphertext_block=aes.encrypt_block(current_block);
-      cipherBlocks.back()=new_last_block;
-    }else {
-      ciphertext_block=aes.encrypt_block(current_block);
+      current_block.insert(current_block.end(), cipher_to_append.begin(),
+                           cipher_to_append.end());
+      // new last block (leftover of the ciphertext of the previous block n-1 )
+      vector<uint8_t> new_last_block(previous_encrypted_block.begin(),
+                                     previous_encrypted_block.end() -
+                                         steal_size);
+      ciphertext_block = aes.encrypt_block(current_block);
+      cipherBlocks[i - 1] = new_last_block;  // Replace C(n-1) with truncated version
+      cipherBlocks.push_back(ciphertext_block);  // Add Cn at the end
+
+    } else {
+      ciphertext_block = aes.encrypt_block(current_block);
+      cipherBlocks.push_back(ciphertext_block);
     }
 
-    cipherBlocks.push_back(ciphertext_block);
-
     if (TWEAK) {
-        utils::increment_tweak(tweak_for_block);
+      utils::increment_tweak(tweak_for_block);
     }
   }
 
   // cout << endl << "Encrypted bytes:" << endl; // COMMENT THIS OUT
   for (size_t i = 0; i < cipherBlocks.size(); i++) {
     // utils::printVector(cipherBlocks[i]); // COMMENT THIS OUT
-    cout.write(reinterpret_cast<const char*>(cipherBlocks[i].data()), cipherBlocks[i].size());
+    cout.write(reinterpret_cast<const char *>(cipherBlocks[i].data()),
+               cipherBlocks[i].size());
   }
 
   return 0;

@@ -1,6 +1,7 @@
 # Compiler and flags
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2
+CXXFLAGS_AESNI := -std=c++17 -Wall -Wextra -O2 -maes -msse4.1
 DEBUGFLAGS := -g -O0
 LDFLAGS := -lssl -lcrypto
 
@@ -39,6 +40,22 @@ $(BIN_DIR)/decrypt: $(BUILD_DIR)/decrypt.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "Decrypt program built: $(BIN_DIR)/decrypt"
 
+# Encrypt AESNI program target (hardware-accelerated)
+encrypt_aesni: $(BIN_DIR)/encrypt_aesni
+
+$(BIN_DIR)/encrypt_aesni: $(BUILD_DIR)/encrypt_aesni.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $^ -o $@ $(LDFLAGS)
+	@echo "Encrypt AESNI program built: $(BIN_DIR)/encrypt_aesni"
+
+# Decrypt AESNI program target (hardware-accelerated)
+decrypt_aesni: $(BIN_DIR)/decrypt_aesni
+
+$(BIN_DIR)/decrypt_aesni: $(BUILD_DIR)/decrypt_aesni.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $^ -o $@ $(LDFLAGS)
+	@echo "Decrypt AESNI program built: $(BIN_DIR)/decrypt_aesni"
+
 # Verify AES program target
 verify: $(BIN_DIR)/verify_aes
 
@@ -58,6 +75,15 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
+# Compile AESNI source files with AES-NI and SSE4.1 flags
+$(BUILD_DIR)/encrypt_aesni.o: $(SRC_DIR)/encrypt_aesni.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
+
+$(BUILD_DIR)/decrypt_aesni.o: $(SRC_DIR)/decrypt_aesni.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
+
 # Debug build
 debug: CXXFLAGS := -std=c++17 -Wall -Wextra $(DEBUGFLAGS)
 debug: clean $(TARGET)
@@ -72,5 +98,5 @@ run: $(TARGET)
 	./$(TARGET)
 
 # Phony targets
-.PHONY: all clean debug run
+.PHONY: all clean debug run encrypt decrypt encrypt_aesni decrypt_aesni verify
 

@@ -43,42 +43,65 @@ int hamming_distance(const vector<uint8_t>& a, const vector<uint8_t>& b) {
 
 int main() {
     // Measurement parameters
-    const int NUM_MEASUREMENTS = 100000;  // can increase for finer chart
-    const uint64_t MAX_TWEAK = 256; // one chain per experiment; each experiment starts at 0
+    const int NUM_MEASUREMENTS = 10000;  // Large number for statistical significance
+    const uint64_t MAX_TWEAK = 256; // tweaks per experiment (0 to 255)
 
     // Histogram (Hamming distance -> count)
     map<int, int> histogram;
 
     // Setup: random block/plaintext and random key (key and tweak sizes per AES-128)
+    cerr << "Running " << NUM_MEASUREMENTS << " experiments with " << MAX_TWEAK << " tweaks each..." << endl;
+    cerr << "Total Hamming distance measurements: " << (NUM_MEASUREMENTS * (MAX_TWEAK - 1)) << endl;
     for (int exp = 0; exp < NUM_MEASUREMENTS; ++exp) {
+        if (exp % 500 == 0) {
+            double progress = (100.0 * exp) / NUM_MEASUREMENTS;
+            cerr << "Progress: " << exp << "/" << NUM_MEASUREMENTS << " (" 
+                 << fixed << setprecision(1) << progress << "%)\r" << flush;
+        }
         vector<uint8_t> plaintext = random_block();
         vector<uint8_t> key      = random_block();
-        AES aes(128, 10, key, vector<uint8_t>(16, 0)); // 16-byte tweak (set to 0, will be set below)
-        // Encrypt with tweak=0 as first
+        
+        // Start with tweak=0
+        vector<uint8_t> tweak = int_to_tweak(0);
+        AES aes(128, 10, key, tweak);
         vector<uint8_t> last_cipher = aes.encrypt_block(plaintext);
+        
+        // Increment tweak and measure Hamming distance
         for (uint64_t t = 1; t < MAX_TWEAK; ++t) {
-            // Create tweak
-            vector<uint8_t> tweak = int_to_tweak(t);
-            // the tweak is the incrementing integer
-            // so we need to create a new AES object with the new tweak
-            // and encrypt the plaintext with the new tweak
-            // and store the cipher in the histogram
-            // and update the last cipher to the new cipher
-            // and repeat for all the tweaks
-            // and then we can plot the histogram
-            // and see the distribution of the hamming distances
-            // and see the average hamming distance
-            aes = AES(128, 10, key, tweak);
-            vector<uint8_t> cipher = aes.encrypt_block(plaintext);
+            // Create new tweak
+            tweak = int_to_tweak(t);
+            // Create new AES with new tweak (key expansion happens here, but measurement is only for encryption)
+            AES aes_new(128, 10, key, tweak);
+            vector<uint8_t> cipher = aes_new.encrypt_block(plaintext);
+            
+            // Measure Hamming distance from previous cipher
             int dist = hamming_distance(cipher, last_cipher);
             histogram[dist] += 1;
+            
             last_cipher = cipher;
         }
     }
+    
+    cerr << "\nCompleted!" << endl;
+    
     // Output CSV
     cout << "hamming_distance,count\n";
     for (auto& pair : histogram) {
         cout << pair.first << "," << pair.second << "\n";
     }
+    
+    // Calculate statistics
+    long long total = 0;
+    long long sum_dist = 0;
+    for (auto& pair : histogram) {
+        total += pair.second;
+        sum_dist += (long long)pair.first * pair.second;
+    }
+    double avg = (double)sum_dist / total;
+    
+    cerr << "Total measurements: " << total << endl;
+    cerr << "Average Hamming distance: " << avg << " bits (out of 128)" << endl;
+    cerr << "Expected for random: 64 bits" << endl;
+    
     return 0;
 }

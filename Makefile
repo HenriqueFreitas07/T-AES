@@ -64,6 +64,30 @@ $(BIN_DIR)/verify_aes: $(BUILD_DIR)/verify_aes.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "Verify program built: $(BIN_DIR)/verify_aes"
 
+# Speed benchmark program target (with AES-NI)
+speed: $(BIN_DIR)/speed
+
+$(BIN_DIR)/speed: $(BUILD_DIR)/speed.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $^ -o $@ $(LDFLAGS)
+	@echo "Speed benchmark program built: $(BIN_DIR)/speed"
+
+# Statistical analysis program target
+stat: $(BIN_DIR)/stat
+
+$(BIN_DIR)/stat: $(BUILD_DIR)/stat.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@echo "Statistical analysis program built: $(BIN_DIR)/stat"
+
+# Speed benchmark v2 (excludes key expansion from timing)
+speed_2: $(BIN_DIR)/speed_2
+
+$(BIN_DIR)/speed_2: $(BUILD_DIR)/speed_2.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $^ -o $@ $(LDFLAGS)
+	@echo "Speed benchmark v2 program built: $(BIN_DIR)/speed_2"
+
 # Link object files to create executable
 $(TARGET): $(OBJS)
 	@mkdir -p $(BIN_DIR)
@@ -84,6 +108,16 @@ $(BUILD_DIR)/decrypt_aesni.o: $(SRC_DIR)/decrypt_aesni.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
 
+# Compile speed.o with AES-NI flags
+$(BUILD_DIR)/speed.o: $(SRC_DIR)/speed.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
+
+# Compile speed_2.o with AES-NI flags
+$(BUILD_DIR)/speed_2.o: $(SRC_DIR)/speed_2.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
+
 # Debug build
 debug: CXXFLAGS := -std=c++17 -Wall -Wextra $(DEBUGFLAGS)
 debug: clean $(TARGET)
@@ -98,5 +132,5 @@ run: $(TARGET)
 	./$(TARGET)
 
 # Phony targets
-.PHONY: all clean debug run encrypt decrypt encrypt_aesni decrypt_aesni verify
+.PHONY: all clean debug run encrypt decrypt encrypt_aesni decrypt_aesni verify speed stat speed_2
 

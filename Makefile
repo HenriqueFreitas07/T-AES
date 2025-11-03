@@ -21,8 +21,8 @@ OBJS := $(SRCS:$(SRC_DIR)/%.cpp=$(BUILD_DIR)/%.o)
 # Include directories
 INCLUDES := -I$(INCLUDE_DIR)
 
-# Default target
-all: $(TARGET)
+# Default target - build all individual programs
+all: encrypt decrypt encrypt_aesni decrypt_aesni verify speed stat speed_2 speed_3
 
 # Encrypt program target
 encrypt: $(BIN_DIR)/encrypt
@@ -88,6 +88,14 @@ $(BIN_DIR)/speed_2: $(BUILD_DIR)/speed_2.o
 	$(CXX) $(CXXFLAGS_AESNI) $^ -o $@ $(LDFLAGS)
 	@echo "Speed benchmark v2 program built: $(BIN_DIR)/speed_2"
 
+# Speed benchmark v3 (T-AES vs OpenSSL XTS comparison)
+speed_3: $(BIN_DIR)/speed_3
+
+$(BIN_DIR)/speed_3: $(BUILD_DIR)/speed_3.o
+	@mkdir -p $(BIN_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $^ -o $@ $(LDFLAGS)
+	@echo "Speed benchmark v3 program built: $(BIN_DIR)/speed_3"
+
 # Link object files to create executable
 $(TARGET): $(OBJS)
 	@mkdir -p $(BIN_DIR)
@@ -118,6 +126,11 @@ $(BUILD_DIR)/speed_2.o: $(SRC_DIR)/speed_2.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
 
+# Compile speed_3.o with AES-NI flags
+$(BUILD_DIR)/speed_3.o: $(SRC_DIR)/speed_3.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
+
 # Debug build
 debug: CXXFLAGS := -std=c++17 -Wall -Wextra $(DEBUGFLAGS)
 debug: clean $(TARGET)
@@ -132,5 +145,5 @@ run: $(TARGET)
 	./$(TARGET)
 
 # Phony targets
-.PHONY: all clean debug run encrypt decrypt encrypt_aesni decrypt_aesni verify speed stat speed_2
+.PHONY: all clean debug run encrypt decrypt encrypt_aesni decrypt_aesni verify speed stat speed_2 speed_3
 

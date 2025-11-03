@@ -47,9 +47,26 @@ private:
         _mm_storeu_si128((__m128i*)block.data(), data);
     }
 
-    // XOR the round key with the tweak
-    __m128i xor_tweak(const __m128i& round_key, const __m128i& tweak) {
-        return _mm_xor_si128(round_key, tweak);
+    // Arithmetic addition (mod 2^128) of tweak to round key
+    __m128i add_tweak(const __m128i& round_key, const __m128i& tweak) {
+        // Extract bytes from both operands
+        alignas(16) uint8_t rk_bytes[16];
+        alignas(16) uint8_t tw_bytes[16];
+        alignas(16) uint8_t result_bytes[16];
+        
+        _mm_store_si128((__m128i*)rk_bytes, round_key);
+        _mm_store_si128((__m128i*)tw_bytes, tweak);
+        
+        // Perform 128-bit addition with carry (little-endian: byte 0 is LSB)
+        uint16_t carry = 0;
+        for (int i = 0; i < 16; ++i) {
+            uint16_t sum = static_cast<uint16_t>(rk_bytes[i]) + 
+                          static_cast<uint16_t>(tw_bytes[i]) + carry;
+            result_bytes[i] = static_cast<uint8_t>(sum & 0xFF);
+            carry = sum >> 8;
+        }
+        
+        return _mm_load_si128((__m128i*)result_bytes);
     }
 
     int get_tweak_round() const {
@@ -328,7 +345,7 @@ public:
         for (int round = 1; round < n_rounds; ++round) {
             // Check if we need to apply tweak at this round
             if (has_tweak && round == tweak_round) {
-                __m128i tweaked_key = xor_tweak(round_keys[round], tweak);
+                __m128i tweaked_key = add_tweak(round_keys[round], tweak);
                 state = _mm_aesenc_si128(state, tweaked_key);
             } else {
                 state = _mm_aesenc_si128(state, round_keys[round]);
@@ -378,9 +395,9 @@ public:
         for (int round = n_rounds - 1; round >= 1; --round) {
             // Check if we need to apply tweak at this round
             if (has_tweak && round == tweak_round) {
-                // Apply InvMixColumns to (round_key XOR tweak) combination
+                // Apply InvMixColumns to (round_key + tweak) combination
                 // Not to round_key and tweak separately!
-                __m128i tweaked_key = xor_tweak(round_keys[round], tweak);
+                __m128i tweaked_key = add_tweak(round_keys[round], tweak);
                 tweaked_key = _mm_aesimc_si128(tweaked_key);
                 state = _mm_aesdec_si128(state, tweaked_key);
             } else {

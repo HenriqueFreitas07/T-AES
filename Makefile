@@ -1,7 +1,7 @@
 # Compiler and flags
 CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -O2
-CXXFLAGS_AESNI := -std=c++17 -Wall -Wextra -O2 -maes -msse4.1
+CXXFLAGS := -std=c++17 -Wall -Wextra -O3
+CXXFLAGS_AESNI := -std=c++17 -Wall -Wextra -O3 -maes -msse4.1
 DEBUGFLAGS := -g -O0
 LDFLAGS := -lssl -lcrypto
 

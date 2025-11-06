@@ -22,6 +22,18 @@ int Check_CPU_support_AES() {
   return (c & 0x2000000);
 }
 
+// Suppress GCC's ignored-attributes warning for using __m128i as a template
+// argument (it carries vector attributes that std::vector ignores). This is
+// harmless, but we silence it to keep builds warning-free.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-attributes"
+#endif
+using m128i_vec = vector<__m128i>;
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
 class AESNI {
   int key_size;
   int n_rounds;
@@ -29,7 +41,7 @@ class AESNI {
   vector<uint8_t> tweak_key;
 
   // Round keys storage using __m128i for hardware acceleration
-  vector<__m128i> round_keys;
+  m128i_vec round_keys;
 
 private:
   // Helper function to load 16 bytes into __m128i register
@@ -321,8 +333,8 @@ public:
     // Load block into __m128i register
     __m128i state = load_block(block);
 
-    // Load tweak if present
-    __m128i tweak;
+    // Load tweak if present (initialize to zero to avoid uninitialized warnings)
+    __m128i tweak = _mm_setzero_si128();
     bool has_tweak = !tweak_key.empty();
     int tweak_round = 0;
     if (has_tweak) {
@@ -364,8 +376,8 @@ public:
     // Load block into __m128i register
     __m128i state = load_block(block);
 
-    // Load tweak if present
-    __m128i tweak;
+    // Load tweak if present (initialize to zero to avoid uninitialized warnings)
+    __m128i tweak = _mm_setzero_si128();
     bool has_tweak = !tweak_key.empty();
     int tweak_round = 0;
     if (has_tweak) {
@@ -375,7 +387,7 @@ public:
 
     // For decryption, we need to use the inverse mix columns transformation
     // on all round keys except the first and last
-    vector<__m128i> dec_round_keys = round_keys;
+  m128i_vec dec_round_keys = round_keys;
     for (int i = 1; i < n_rounds; ++i) {
       dec_round_keys[i] = _mm_aesimc_si128(round_keys[i]);
     }

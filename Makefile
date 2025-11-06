@@ -22,7 +22,7 @@ OBJS := $(SRCS:$(SRC_DIR)/%.cpp=$(BUILD_DIR)/%.o)
 INCLUDES := -I$(INCLUDE_DIR)
 
 # Default target - build all individual programs
-all: encrypt decrypt encrypt_aesni decrypt_aesni verify speed stat speed_2 speed_3
+all: encrypt decrypt encrypt_aesni decrypt_aesni verify stat speed
 
 # Encrypt program target
 encrypt: $(BIN_DIR)/encrypt
@@ -64,7 +64,7 @@ $(BIN_DIR)/verify_aes: $(BUILD_DIR)/verify_aes.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "Verify program built: $(BIN_DIR)/verify_aes"
 
-# Speed benchmark program target (with AES-NI)
+# Speed benchmark (renamed consolidated benchmark; uses AES-NI flags)
 speed: $(BIN_DIR)/speed
 
 $(BIN_DIR)/speed: $(BUILD_DIR)/speed.o
@@ -80,21 +80,7 @@ $(BIN_DIR)/stat: $(BUILD_DIR)/stat.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "Statistical analysis program built: $(BIN_DIR)/stat"
 
-# Speed benchmark v2 (excludes key expansion from timing)
-speed_2: $(BIN_DIR)/speed_2
-
-$(BIN_DIR)/speed_2: $(BUILD_DIR)/speed_2.o
-	@mkdir -p $(BIN_DIR)
-	$(CXX) $(CXXFLAGS_AESNI) $^ -o $@ $(LDFLAGS)
-	@echo "Speed benchmark v2 program built: $(BIN_DIR)/speed_2"
-
-# Speed benchmark v3 (T-AES vs OpenSSL XTS comparison)
-speed_3: $(BIN_DIR)/speed_3
-
-$(BIN_DIR)/speed_3: $(BUILD_DIR)/speed_3.o
-	@mkdir -p $(BIN_DIR)
-	$(CXX) $(CXXFLAGS_AESNI) $^ -o $@ $(LDFLAGS)
-	@echo "Speed benchmark v3 program built: $(BIN_DIR)/speed_3"
+# (Removed legacy speed_2 and speed_3 targets after consolidation)
 
 # Link object files to create executable
 $(TARGET): $(OBJS)
@@ -121,15 +107,7 @@ $(BUILD_DIR)/speed.o: $(SRC_DIR)/speed.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
 
-# Compile speed_2.o with AES-NI flags
-$(BUILD_DIR)/speed_2.o: $(SRC_DIR)/speed_2.cpp
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
-
-# Compile speed_3.o with AES-NI flags
-$(BUILD_DIR)/speed_3.o: $(SRC_DIR)/speed_3.cpp
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS_AESNI) $(INCLUDES) -c $< -o $@
+# (Removed legacy compile rules for speed_2.o and speed_3.o)
 
 # Debug build
 debug: CXXFLAGS := -std=c++17 -Wall -Wextra $(DEBUGFLAGS)
@@ -145,5 +123,5 @@ run: $(TARGET)
 	./$(TARGET)
 
 # Phony targets
-.PHONY: all clean debug run encrypt decrypt encrypt_aesni decrypt_aesni verify speed stat speed_2 speed_3
+.PHONY: all clean debug run encrypt decrypt encrypt_aesni decrypt_aesni verify speed stat
 

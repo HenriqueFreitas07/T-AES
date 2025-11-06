@@ -97,10 +97,10 @@ struct BenchmarkResult {
     int iterations;
     
     double avg_ns() const { return (double)total_ns / iterations; }
-    double throughput_mbps() const { 
+    double throughput_gbps() const {
         double seconds = avg_ns() / 1e9;
-        double mb = (BUFFER_SIZE * iterations) / (1024.0 * 1024.0);
-        return mb / seconds;
+        double gb = (BUFFER_SIZE * iterations) / (1024.0 * 1024.0 * 1024.0);
+        return gb / seconds;
     }
     double latency_us() const { return avg_ns() / 1000.0; }
 };
@@ -276,51 +276,51 @@ int main() {
     results.push_back({"OpenSSL XTS-128 Decrypt", result_xts128_dec});
 
     // ========== OpenSSL XTS-256 ==========
-    cout << "\n[7/8] OpenSSL XTS-256 Encryption\n";
-    auto result_xts256_enc = benchmark_operation(
-        "OpenSSL XTS-256 Encryption",
-        []() {
-            uint8_t key1[32], key2[32];
-            generate_random_key(key1, 32);
-            generate_random_key(key2, 32);
-            uint8_t full_key[64];
-            memcpy(full_key, key1, 32);
-            memcpy(full_key + 32, key2, 32);
+    // cout << "\n[7/8] OpenSSL XTS-256 Encryption\n";
+    // auto result_xts256_enc = benchmark_operation(
+    //     "OpenSSL XTS-256 Encryption",
+    //     []() {
+    //         uint8_t key1[32], key2[32];
+    //         generate_random_key(key1, 32);
+    //         generate_random_key(key2, 32);
+    //         uint8_t full_key[64];
+    //         memcpy(full_key, key1, 32);
+    //         memcpy(full_key + 32, key2, 32);
             
-            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-            uint8_t iv[16] = {0}; // XTS requires an IV (tweak)
-            EVP_EncryptInit_ex(ctx, EVP_aes_256_xts(), nullptr, full_key, iv);
-            return ctx;
-        },
-        [](uint8_t* buf, size_t sz, EVP_CIPHER_CTX* ctx) {
-            openssl_xts_encrypt_no_keygen(buf, sz, ctx);
-            EVP_CIPHER_CTX_free(ctx);
-        }
-    );
-    results.push_back({"OpenSSL XTS-256 Encrypt", result_xts256_enc});
+    //         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    //         uint8_t iv[16] = {0}; // XTS requires an IV (tweak)
+    //         EVP_EncryptInit_ex(ctx, EVP_aes_256_xts(), nullptr, full_key, iv);
+    //         return ctx;
+    //     },
+    //     [](uint8_t* buf, size_t sz, EVP_CIPHER_CTX* ctx) {
+    //         openssl_xts_encrypt_no_keygen(buf, sz, ctx);
+    //         EVP_CIPHER_CTX_free(ctx);
+    //     }
+    // );
+    // results.push_back({"OpenSSL XTS-256 Encrypt", result_xts256_enc});
 
-    cout << "\n[8/8] OpenSSL XTS-256 Decryption\n";
-    auto result_xts256_dec = benchmark_operation(
-        "OpenSSL XTS-256 Decryption",
-        []() {
-            uint8_t key1[32], key2[32];
-            generate_random_key(key1, 32);
-            generate_random_key(key2, 32);
-            uint8_t full_key[64];
-            memcpy(full_key, key1, 32);
-            memcpy(full_key + 32, key2, 32);
+    // cout << "\n[8/8] OpenSSL XTS-256 Decryption\n";
+    // auto result_xts256_dec = benchmark_operation(
+    //     "OpenSSL XTS-256 Decryption",
+    //     []() {
+    //         uint8_t key1[32], key2[32];
+    //         generate_random_key(key1, 32);
+    //         generate_random_key(key2, 32);
+    //         uint8_t full_key[64];
+    //         memcpy(full_key, key1, 32);
+    //         memcpy(full_key + 32, key2, 32);
             
-            EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-            uint8_t iv[16] = {0};
-            EVP_DecryptInit_ex(ctx, EVP_aes_256_xts(), nullptr, full_key, iv);
-            return ctx;
-        },
-        [](uint8_t* buf, size_t sz, EVP_CIPHER_CTX* ctx) {
-            openssl_xts_decrypt_no_keygen(buf, sz, ctx);
-            EVP_CIPHER_CTX_free(ctx);
-        }
-    );
-    results.push_back({"OpenSSL XTS-256 Decrypt", result_xts256_dec});
+    //         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    //         uint8_t iv[16] = {0};
+    //         EVP_DecryptInit_ex(ctx, EVP_aes_256_xts(), nullptr, full_key, iv);
+    //         return ctx;
+    //     },
+    //     [](uint8_t* buf, size_t sz, EVP_CIPHER_CTX* ctx) {
+    //         openssl_xts_decrypt_no_keygen(buf, sz, ctx);
+    //         EVP_CIPHER_CTX_free(ctx);
+    //     }
+    // );
+    // results.push_back({"OpenSSL XTS-256 Decrypt", result_xts256_dec});
 
     // ========== Print Results Table ==========
     cout << "\n=============================================================\n";
@@ -339,20 +339,20 @@ int main() {
              << right << setw(12) << fixed << setprecision(2) << (res.min_ns / 1000.0)
              << setw(12) << fixed << setprecision(2) << res.latency_us()
              << setw(12) << fixed << setprecision(2) << (res.max_ns / 1000.0)
-             << setw(12) << fixed << setprecision(2) << res.throughput_mbps() << " MB/s"
+             << setw(12) << fixed << setprecision(2) << res.throughput_gbps() << " GB/s"
              << endl;
     }
     cout << "=============================================================\n";
 
     // ========== Write CSV ==========
     ofstream csv("benchmark_results_comparison.csv");
-    csv << "Operation,Min_ns,Avg_ns,Max_ns,Throughput_MBps,Latency_us\n";
+    csv << "Operation,Min_ns,Avg_ns,Max_ns,Throughput_GBps,Latency_us\n";
     for (const auto& [name, res] : results) {
         csv << name << ","
             << res.min_ns << ","
             << res.avg_ns() << ","
             << res.max_ns << ","
-            << res.throughput_mbps() << ","
+            << res.throughput_gbps() << ","
             << res.latency_us() << "\n";
     }
     csv.close();
@@ -366,7 +366,7 @@ int main() {
     double taes_sw_enc_speed = 1.0 / results[0].second.min_ns;
     double taes_ni_enc_speed = 1.0 / results[2].second.min_ns;
     double xts128_enc_speed = 1.0 / results[4].second.min_ns;
-    double xts256_enc_speed = 1.0 / results[6].second.min_ns;
+    // double xts256_enc_speed = 1.0 / results[6].second.min_ns;
     
     cout << "Encryption speedup (relative to T-AES Software):\n";
     cout << "  T-AES Software:   1.00x (baseline)\n";
@@ -374,8 +374,8 @@ int main() {
          << (taes_ni_enc_speed / taes_sw_enc_speed) << "x\n";
     cout << "  OpenSSL XTS-128:  " << fixed << setprecision(2) 
          << (xts128_enc_speed / taes_sw_enc_speed) << "x\n";
-    cout << "  OpenSSL XTS-256:  " << fixed << setprecision(2) 
-         << (xts256_enc_speed / taes_sw_enc_speed) << "x\n";
+    // cout << "  OpenSSL XTS-256:  " << fixed << setprecision(2) 
+    //      << (xts256_enc_speed / taes_sw_enc_speed) << "x\n";
     cout << "=============================================================\n";
 
     return 0;

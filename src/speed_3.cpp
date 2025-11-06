@@ -98,8 +98,9 @@ struct BenchmarkResult {
     
     double avg_ns() const { return (double)total_ns / iterations; }
     double throughput_gbps() const {
+        // Throughput based on single operation (avg time for one 4KB buffer)
         double seconds = avg_ns() / 1e9;
-        double gb = (BUFFER_SIZE * iterations) / (1024.0 * 1024.0 * 1024.0);
+        double gb = BUFFER_SIZE / (1024.0 * 1024.0 * 1024.0);
         return gb / seconds;
     }
     double latency_us() const { return avg_ns() / 1000.0; }

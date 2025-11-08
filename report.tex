@@ -26,7 +26,7 @@
 
 \title{T-AES: Software and Hardware-Accelerated AES Implementation\\with Ciphertext Stealing}
 
-\author{\IEEEauthorblockN{Advanced Cryptography Project}
+\author{\IEEEauthorblockN{Applied Cryptography Project}
 \IEEEauthorblockA{\textit{Computer Architecture} \\
 University of Aveiro\\
 November 2025}}
@@ -214,7 +214,7 @@ Where multiplication is in GF($2^8$) and addition is XOR.
 
 \textbf{Implementation Strategy}:
 Multiplication by 02 in GF($2^8$):
-\begin{lstlisting}[language=C++, caption=GF Multiplication by 2]
+\begin{lstlisting}[language=C++, caption=GF Multiplication by 2, breaklines=true]
 uint8_t gmul2(uint8_t a) {
     return (a << 1) ^ (((a >> 7) & 1) * 0x1B);
 }
@@ -235,7 +235,7 @@ Many implementations use pre-computed tables for efficiency:
 AddRoundKey introduces key material by XORing the state with the round key.
 
 \textbf{Implementation}:
-\begin{lstlisting}[language=C++, caption=AddRoundKey]
+\begin{lstlisting}[language=C++, caption=AddRoundKey, breaklines=true]
 for (int i = 0; i < 16; i++) {
     state[i] ^= roundKey[round * 16 + i];
 }
@@ -405,7 +405,7 @@ Intel AES-NI provides six instructions specifically for AES operations, operatin
 
 \textbf{Basic Encryption Flow}:
 
-\begin{lstlisting}[language=C++, caption=AES-128 Encryption with AES-NI]
+\begin{lstlisting}[language=C++, caption=AES-128 Encryption with AES-NI, breaklines=true, basicstyle=\footnotesize\ttfamily]
 __m128i aesni_encrypt_block(__m128i plaintext,
                            __m128i* key_schedule) {
     __m128i state = plaintext;
@@ -439,7 +439,7 @@ Key expansion still requires some software logic, but AESKEYGENASSIST accelerate
 
 \textbf{AES-128 Key Schedule Generation}:
 
-\begin{lstlisting}[language=C++, caption=Key Expansion with AES-NI Helper]
+\begin{lstlisting}[language=C++, caption=Key Expansion with AES-NI Helper, breaklines=true, basicstyle=\footnotesize\ttfamily]
 void aesni_key_expansion_128(uint8_t* userkey,
                              __m128i* key_schedule) {
     __m128i key = _mm_loadu_si128((__m128i*)userkey);
@@ -510,7 +510,7 @@ The T-AES hardware implementation (encrypt\_aesni.cpp) mirrors the software stru
 
 \textbf{Block Processing}:
 
-\begin{lstlisting}[language=C++, caption=From encrypt\_aesni.cpp]
+\begin{lstlisting}[language=C++, caption=From encrypt\_aesni.cpp, breaklines=true, basicstyle=\footnotesize\ttfamily]
 AESNI aes_ni(key_size, n_rounds, key, tweak);
 
 for (size_t i = 0; i < all_blocks.size(); i++) {
@@ -587,7 +587,7 @@ Total tests run: 150
 Passed: 150
 Failed: 0
 
-All tests passed! 🎉
+All tests passed!
 \end{verbatim}
 
 \subsection{Key Findings}
@@ -596,8 +596,8 @@ All tests passed! 🎉
 
 All cross-compatibility tests passed, confirming:
 \begin{itemize}
-    \item Software encryption → Hardware decryption: ✓
-    \item Hardware encryption → Software decryption: ✓
+    \item Software encryption $\rightarrow$ Hardware decryption: PASS
+    \item Hardware encryption $\rightarrow$ Software decryption: PASS
     \item Identical ciphertext for identical inputs across implementations
     \item AES-NI correctly implements FIPS 197 specification
 \end{itemize}
@@ -608,14 +608,14 @@ All cross-compatibility tests passed, confirming:
 \begin{verbatim}
 Input: 0 bytes
 Output: 0 bytes
-Round-trip: ✓ PASS
+Round-trip: PASS
 \end{verbatim}
 
 \textbf{Irregular Size Test} (17 bytes - requires ciphertext stealing):
 \begin{verbatim}
 Input: 17 bytes
 Ciphertext: 17 bytes (no padding)
-Round-trip: ✓ PASS
+Round-trip: PASS
 \end{verbatim}
 
 This confirms ciphertext stealing correctly preserves length and handles partial blocks.
@@ -658,21 +658,21 @@ The \texttt{stat} application measures the cryptographic avalanche property of t
 \begin{enumerate}
     \item Generate random plaintext block (16 bytes)
     \item Generate random key (16 bytes)
-    \item Encrypt with tweak = 0, store ciphertext C₀
+    \item Encrypt with tweak = 0, store ciphertext $C_0$
     \item For tweak = 1 to 255:
     \begin{itemize}
-        \item Encrypt same plaintext with new tweak → Cᵢ
-        \item Compute Hamming distance: HD(Cᵢ, Cᵢ₋₁)
+        \item Encrypt same plaintext with new tweak $\rightarrow C_i$
+        \item Compute Hamming distance: $HD(C_i, C_{i-1})$
         \item Record distance in histogram
     \end{itemize}
 \end{enumerate}
 
 \subsection{Results}
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.8\textwidth]{stat_histogram.pdf}
-\caption{Hamming distance distribution for tweak increments (2.55M measurements). The red dashed line indicates the observed mean (64.00 bits), and the green dashed line shows the theoretical expectation (64.0 bits). The distribution follows a binomial B(128, 0.5), demonstrating perfect avalanche effect.}
+\includegraphics[width=0.65\textwidth]{stat_histogram.pdf}
+\caption{Hamming distance distribution for tweak increments (2.55M measurements). Red line: observed mean (64.00 bits); green line: theoretical expectation (64.0 bits). Distribution follows binomial B(128, 0.5).}
 \label{fig:stat_histogram}
 \end{figure}
 
@@ -734,7 +734,7 @@ This section presents detailed performance measurements comparing T-AES implemen
 \begin{itemize}
     \item Buffer size: 4096 bytes (4KB - one memory page)
     \item Iterations: 100,000 per operation
-    \item Timing method: \texttt{clock\_gettime(CLOCK\_MONOTONIC)} (nanosecond precision)
+    \item Timing method: \texttt{clock\_gettime()} with \texttt{CLOCK\_MONOTONIC} (nanosecond precision)
     \item Key sizes tested: 128, 192, 256 bits
     \item Tweak modes: with-tweak and no-tweak
     \item XTS comparison: OpenSSL 128-bit and 256-bit
@@ -750,7 +750,7 @@ This section presents detailed performance measurements comparing T-AES implemen
 \small
 \begin{tabular}{|l|r|r|r|r|}
 \hline
-\textbf{Operation} & \textbf{Min (μs)} & \textbf{Avg (μs)} & \textbf{Max (μs)} & \textbf{Throughput (GB/s)} \\
+\textbf{Operation} & \textbf{Min ($\mu$s)} & \textbf{Avg ($\mu$s)} & \textbf{Max ($\mu$s)} & \textbf{Throughput (GB/s)} \\
 \hline
 \multicolumn{5}{|c|}{\textit{T-AES Software - AES-128}} \\
 \hline
@@ -838,7 +838,7 @@ OpenSSL XTS-256 & 165.95x \\
 \textbf{Absolute Performance}:
 \begin{itemize}
     \item Peak throughput: 0.461 GB/s (AES-NI 128-bit encryption)
-    \item Average latency: 8-13 μs per 4KB block
+    \item Average latency: 8-13 $\mu$s per 4KB block
     \item Decryption ~30-40\% slower than encryption (InvMixColumns overhead)
 \end{itemize}
 
@@ -904,10 +904,10 @@ Despite AES-NI reducing instruction count by ~100x, we observe only 11x real-wor
 
 \textbf{Breakdown} (estimated):
 \begin{itemize}
-    \item Pure encryption: ~2 μs (AES-NI)
-    \item Memory operations: ~3 μs
-    \item Overhead (setup, checks): ~3 μs
-    \item Total: ~8 μs per 4KB block
+    \item Pure encryption: ~2 $\mu$s (AES-NI)
+    \item Memory operations: ~3 $\mu$s
+    \item Overhead (setup, checks): ~3 $\mu$s
+    \item Total: ~8 $\mu$s per 4KB block
 \end{itemize}
 
 \subsubsection{Comparison Context}
@@ -953,7 +953,7 @@ This section presents a comprehensive analysis comparing software and hardware A
     \item MixColumns: ~64 instructions (GF multiplications and XORs)
     \item AddRoundKey: 16 XOR instructions
     \item \textbf{Per round}: ~132 instructions
-    \item \textbf{AES-128 total}: 10 rounds × 132 + overhead ≈ 1400 instructions
+    \item \textbf{AES-128 total}: 10 rounds $\times$ 132 + overhead $\approx$ 1400 instructions
 \end{itemize}
 
 \paragraph{\textbf{Hardware Implementation (per block)}}:
@@ -1026,24 +1026,24 @@ The \texttt{test\_all\_combinations.sh} script executes 60+ tests covering:
 
 \textbf{Results}:
 \begin{verbatim}
-✓ AES-128 software without tweak
-✓ AES-128 software with tweak
-✓ AES-128 hardware without tweak
-✓ AES-128 hardware with tweak
-✓ AES-192 software without tweak
-✓ AES-192 software with tweak
-✓ AES-192 hardware without tweak
-✓ AES-192 hardware with tweak
-✓ AES-256 software without tweak
-✓ AES-256 software with tweak
-✓ AES-256 hardware without tweak
-✓ AES-256 hardware with tweak
+[PASS] AES-128 software without tweak
+[PASS] AES-128 software with tweak
+[PASS] AES-128 hardware without tweak
+[PASS] AES-128 hardware with tweak
+[PASS] AES-192 software without tweak
+[PASS] AES-192 software with tweak
+[PASS] AES-192 hardware without tweak
+[PASS] AES-192 hardware with tweak
+[PASS] AES-256 software without tweak
+[PASS] AES-256 software with tweak
+[PASS] AES-256 hardware without tweak
+[PASS] AES-256 hardware with tweak
 
 Tests passed: 12/12
 \end{verbatim}
 
 \textbf{Validation Method}:
-\begin{lstlisting}[language=bash]
+\begin{lstlisting}[language=bash, basicstyle=\footnotesize\ttfamily, breaklines=true]
 cat plaintext.bin | ./encrypt 128 "password" | \
     ./decrypt 128 "password" > output.bin
 cmp -s plaintext.bin output.bin  # Binary comparison
@@ -1055,18 +1055,18 @@ cmp -s plaintext.bin output.bin  # Binary comparison
 
 \textbf{Results}:
 \begin{verbatim}
-✓ AES-128 software vs hardware without tweak
-✓ AES-128 software vs hardware with tweak
-✓ AES-192 software vs hardware without tweak
-✓ AES-192 software vs hardware with tweak
-✓ AES-256 software vs hardware without tweak
-✓ AES-256 software vs hardware with tweak
+[PASS] AES-128 software vs hardware without tweak
+[PASS] AES-128 software vs hardware with tweak
+[PASS] AES-192 software vs hardware without tweak
+[PASS] AES-192 software vs hardware with tweak
+[PASS] AES-256 software vs hardware without tweak
+[PASS] AES-256 software vs hardware with tweak
 
 Tests passed: 6/6
 \end{verbatim}
 
 \textbf{Validation Method}:
-\begin{lstlisting}[language=bash]
+\begin{lstlisting}[language=bash, basicstyle=\footnotesize\ttfamily, breaklines=true]
 cat plaintext.bin | ./encrypt 128 "password" > cipher_sw.bin
 cat plaintext.bin | ./encrypt_aesni 128 "password" > cipher_hw.bin
 cmp -s cipher_sw.bin cipher_hw.bin
@@ -1088,17 +1088,17 @@ cmp -s cipher_sw.bin cipher_hw.bin
 
 \textbf{Results}:
 \begin{verbatim}
-✓ AES-128 software wrong key (correctly fails)
-✓ AES-128 software wrong key with tweak (correctly fails)
-✓ AES-128 hardware wrong key (correctly fails)
-✓ AES-128 hardware wrong key with tweak (correctly fails)
+[PASS] AES-128 software wrong key (correctly fails)
+[PASS] AES-128 software wrong key with tweak (correctly fails)
+[PASS] AES-128 hardware wrong key (correctly fails)
+[PASS] AES-128 hardware wrong key with tweak (correctly fails)
 ... (similar for 192, 256)
 
 Tests passed: 12/12 (negative tests)
 \end{verbatim}
 
 \textbf{Test Logic}:
-\begin{lstlisting}[language=bash]
+\begin{lstlisting}[language=bash, basicstyle=\footnotesize\ttfamily, breaklines=true]
 cat plaintext.bin | ./encrypt 128 "correct_pwd" | \
     ./decrypt 128 "wrong_pwd" > output.bin
 
@@ -1122,12 +1122,12 @@ fi
 
 \textbf{Results}:
 \begin{verbatim}
-✓ AES-128 software wrong tweak (correctly fails)
-✓ AES-192 software wrong tweak (correctly fails)
-✓ AES-256 software wrong tweak (correctly fails)
-✓ AES-128 hardware wrong tweak (correctly fails)
-✓ AES-192 hardware wrong tweak (correctly fails)
-✓ AES-256 hardware wrong tweak (correctly fails)
+[PASS] AES-128 software wrong tweak (correctly fails)
+[PASS] AES-192 software wrong tweak (correctly fails)
+[PASS] AES-256 software wrong tweak (correctly fails)
+[PASS] AES-128 hardware wrong tweak (correctly fails)
+[PASS] AES-192 hardware wrong tweak (correctly fails)
+[PASS] AES-256 hardware wrong tweak (correctly fails)
 
 Tests passed: 6/6 (negative tests)
 \end{verbatim}
@@ -1150,17 +1150,17 @@ Tests passed: 6/6 (negative tests)
 
 \textbf{Results}:
 \begin{verbatim}
-✓ AES-128 software irregular size (ciphertext stealing)
-✓ AES-128 software irregular size with tweak (ciphertext stealing)
-✓ AES-128 hardware irregular size (ciphertext stealing)
-✓ AES-128 hardware irregular size with tweak (ciphertext stealing)
+[PASS] AES-128 software irregular size (ciphertext stealing)
+[PASS] AES-128 software irregular size with tweak (ciphertext stealing)
+[PASS] AES-128 hardware irregular size (ciphertext stealing)
+[PASS] AES-128 hardware irregular size with tweak (ciphertext stealing)
 ... (similar for 192, 256)
 
 Tests passed: 12/12
 \end{verbatim}
 
 \textbf{Length Verification}:
-\begin{lstlisting}[language=bash]
+\begin{lstlisting}[language=bash, basicstyle=\footnotesize\ttfamily, breaklines=true]
 INPUT_SIZE=$(wc -c < irregular.txt)   # 23 bytes
 cat irregular.txt | ./encrypt 128 "pwd" > cipher.bin
 CIPHER_SIZE=$(wc -c < cipher.bin)     # 23 bytes

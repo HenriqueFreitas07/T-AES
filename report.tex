@@ -24,7 +24,7 @@
 
 \begin{document}
 
-\title{T-AES: Software and Hardware-Accelerated AES Implementation\\with Ciphertext Stealing}
+\title{T-AES: Software and Hardware-Accelerated AES\\with Ciphertext Stealing}
 
 \author{\IEEEauthorblockN{Applied Cryptography Project}
 \IEEEauthorblockA{\textit{Computer Architecture} \\
@@ -47,7 +47,7 @@ The Advanced Encryption Standard (AES) has become the de facto symmetric encrypt
 
 Modern processors have evolved to include specialized instructions for AES operations. Intel's AES New Instructions (AES-NI), introduced in 2010, provide hardware-level acceleration for AES encryption and decryption. These instructions offer substantial performance improvements while maintaining resistance to timing-based side-channel attacks that can affect software implementations.
 
-This project implements AES encryption and decryption in software and hardware-accelerated forms, in order to compare both approaches in terms of permformance. The implementation follows NIST FIPS 197 specifications and includes support for all three standard key sizes (128, 192, and 256 bits). A notable feature is the ciphertext stealing technique, which eliminates the need for padding when processing data that doesn't align to 16-byte block boundaries.
+This project implements AES encryption and decryption in software and hardware-accelerated forms, in order to compare both approaches in terms of performance. The implementation follows NIST FIPS 197 specifications and includes support for all three standard key sizes (128, 192, and 256 bits). A notable feature is the ciphertext stealing technique, which eliminates the need for padding when processing data that doesn't align to 16-byte block boundaries.
 
 \section{Baseline Requirements and Specifications}
 
@@ -71,7 +71,7 @@ The T-AES project requires the use of command-line use and integration with Unix
 \end{itemize}
 
 \subsubsection{Ciphertext Stealing Requirement}
-When input data length is not a multiple of 16 bytes, the implementation must use ciphertext stealing rather than padding:
+When input data length is not a multiple of 16 bytes, the implementation must use ciphertext stealing instead of padding:
 \begin{itemize}
     \item \textbf{No Padding}: Avoid PKCS\#7 or other padding schemes
     \item \textbf{Length Preservation}: Ciphertext length must exactly equal plaintext length
@@ -84,7 +84,7 @@ When input data length is not a multiple of 16 bytes, the implementation must us
 \begin{itemize}
     \item \textbf{Software Version}: Pure C++ implementation using lookup tables and bitwise operations
     \item \textbf{Hardware Version}: AES-NI accelerated implementation using Intel intrinsics
-    \item \textbf{Functional Equivalence}: Both versions must produce identical ciphertext for identical inputs, hand both must work together and interleave between the outputs and inputs of the cipherstreams.
+    \item \textbf{Functional Equivalence}: Both versions must produce identical ciphertext for identical inputs and maintain cryptographic equivalence
     \item \textbf{Separate Binaries}: Build system generates distinct executables for each implementation
 \end{itemize}
 
@@ -140,7 +140,7 @@ The AES algorithm operates on a 128-bit (16-byte) state represented as a 4×4 ma
 The implementation stores the state as a linear array of 16 bytes that logically represents a column-major 4×4 matrix:
 
 \begin{verbatim}
-State[16] = {s0,s1,,..., s13,s14,s15}
+State[16] = {s0, s1, ..., s13, s14, s15}
 
 Matrix form:  s0  s4  s8  s12
               s1  s5  s9  s13
@@ -152,14 +152,14 @@ This column-major layout aligns with AES specification and simplifies the MixCol
 
 \subsubsection{SubBytes Transformation}
 
-SubBytes provides non-linearity by replacing each byte with its corresponding value from the AES S-box.
+SubBytes provides non-linearity by substituting each byte using the AES S-box.
 
 \textbf{Implementation Approach}:
 \begin{itemize}
     \item Pre-computed lookup table with 256 entries stored in memory
     \item Each byte $b$ in the state is replaced with $S[b]$
     \item S-box constructed from multiplicative inverse in GF($2^8$) plus affine transformation
-    \item Simple array indexing: \texttt{state[i] = sbox[state[i]]}
+    \item Simple array indexing: \texttt{state[i] = sbox[state[i]]} performs substitution
 \end{itemize}
 
 \textbf{Security Consideration}: Table lookups can leak timing information through cache side-channels. Accessing \texttt{sbox[k]} where $k$ depends on secret data may reveal information to attackers monitoring cache patterns.
@@ -180,7 +180,7 @@ This is implemented using a temporary buffer or in-place permutation to avoid ov
 
 \subsubsection{MixColumns Transformation}
 
-MixColumns provides strong diffusion by mixing bytes within each column using Galois Field arithmetic.
+MixColumns provides diffusion by mixing bytes within each column using Galois Field arithmetic.
 
 \textbf{Mathematical Foundation}:
 
@@ -214,7 +214,7 @@ Where multiplication is in GF($2^8$) and addition is XOR.
 
 \textbf{Implementation Strategy}:
 Multiplication by 02 in GF($2^8$):
-\begin{lstlisting}[language=C++, caption=GF Multiplication by 2, breaklines=true]
+\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
 uint8_t gmul2(uint8_t a) {
     return (a << 1) ^ (((a >> 7) & 1) * 0x1B);
 }
@@ -232,10 +232,10 @@ Many implementations use pre-computed tables for efficiency:
 
 \subsubsection{AddRoundKey Transformation}
 
-AddRoundKey introduces key material by XORing the state with the round key.
+AddRoundKey incorporates key material by XORing the state with the round key.
 
 \textbf{Implementation}:
-\begin{lstlisting}[language=C++, caption=AddRoundKey, breaklines=true]
+\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
 for (int i = 0; i < 16; i++) {
     state[i] ^= roundKey[round * 16 + i];
 }
@@ -362,7 +362,7 @@ Intel AES-NI provides six instructions specifically for AES operations, operatin
 
 \textbf{AESENC} - AES Single Round Encryption:
 \begin{itemize}
-    \item Intrinsic: \texttt{\_mm\_aesenc\_si128(\_\_m128i state, \_\_m128i roundkey)}
+    \item Intrinsic: \texttt{\_mm\_aesenc\_si128(state, roundkey)}
     \item Operation: Performs SubBytes + ShiftRows + MixColumns + AddRoundKey
     \item Fuses four transformations into single hardware operation
     \item Throughput: 1-2 instructions per cycle with pipelining
@@ -370,7 +370,7 @@ Intel AES-NI provides six instructions specifically for AES operations, operatin
 
 \textbf{AESENCLAST} - AES Last Round Encryption:
 \begin{itemize}
-    \item Intrinsic: \texttt{\_mm\_aesenclast\_si128(\_\_m128i state, \_\_m128i roundkey)}
+    \item Intrinsic: \texttt{\_mm\_aesenclast\_si128(state, roundkey)}
     \item Operation: SubBytes + ShiftRows + AddRoundKey (no MixColumns)
     \item Used for the final encryption round
     \item Same latency as AESENC
@@ -380,14 +380,14 @@ Intel AES-NI provides six instructions specifically for AES operations, operatin
 
 \textbf{AESDEC} - AES Single Round Decryption:
 \begin{itemize}
-    \item Intrinsic: \texttt{\_mm\_aesdec\_si128(\_\_m128i state, \_\_m128i roundkey)}
+    \item Intrinsic: \texttt{\_mm\_aesdec\_si128(state, roundkey)}
     \item Operation: InvSubBytes + InvShiftRows + InvMixColumns + AddRoundKey
     \item Equivalent to AESENC but with inverse operations
 \end{itemize}
 
 \textbf{AESDECLAST} - AES Last Round Decryption:
 \begin{itemize}
-    \item Intrinsic: \texttt{\_mm\_aesdeclast\_si128(\_\_m128i state, \_\_m128i roundkey)}
+    \item Intrinsic: \texttt{\_mm\_aesdeclast\_si128(state, roundkey)}
     \item Operation: InvSubBytes + InvShiftRows + AddRoundKey
 \end{itemize}
 
@@ -395,7 +395,7 @@ Intel AES-NI provides six instructions specifically for AES operations, operatin
 
 \textbf{AESKEYGENASSIST} - AES Key Generation Assist:
 \begin{itemize}
-    \item Intrinsic: \texttt{\_mm\_aeskeygenassist\_si128(\_\_m128i key, const int rcon)}
+    \item Intrinsic: \texttt{\_mm\_aeskeygenassist\_si128(key, rcon)}
     \item Assists with key schedule generation
     \item Performs rotation, SubBytes application, and round constant XOR
     \item Software still handles remaining XOR operations
@@ -405,22 +405,15 @@ Intel AES-NI provides six instructions specifically for AES operations, operatin
 
 \textbf{Basic Encryption Flow}:
 
-\begin{lstlisting}[language=C++, caption=AES-128 Encryption with AES-NI, breaklines=true, basicstyle=\footnotesize\ttfamily]
+\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
 __m128i aesni_encrypt_block(__m128i plaintext,
                            __m128i* key_schedule) {
     __m128i state = plaintext;
-
-    // Initial round
     state = _mm_xor_si128(state, key_schedule[0]);
-
-    // Main rounds (9 for AES-128)
     for (int i = 1; i < 10; i++) {
         state = _mm_aesenc_si128(state, key_schedule[i]);
     }
-
-    // Final round (without MixColumns)
     state = _mm_aesenclast_si128(state, key_schedule[10]);
-
     return state;
 }
 \end{lstlisting}
@@ -439,26 +432,17 @@ Key expansion still requires some software logic, but AESKEYGENASSIST accelerate
 
 \textbf{AES-128 Key Schedule Generation}:
 
-\begin{lstlisting}[language=C++, caption=Key Expansion with AES-NI Helper, breaklines=true, basicstyle=\footnotesize\ttfamily]
+\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
 void aesni_key_expansion_128(uint8_t* userkey,
                              __m128i* key_schedule) {
     __m128i key = _mm_loadu_si128((__m128i*)userkey);
     key_schedule[0] = key;
-
     key = key_expansion_128(key,
           _mm_aeskeygenassist_si128(key, 0x01));
     key_schedule[1] = key;
-
-    key = key_expansion_128(key,
-          _mm_aeskeygenassist_si128(key, 0x02));
-    key_schedule[2] = key;
-
-    // Continue for remaining 8 rounds...
 }
-
 __m128i key_expansion_128(__m128i key, __m128i keygened) {
     keygened = _mm_shuffle_epi32(keygened, 0xFF);
-    key = _mm_xor_si128(key, _mm_slli_si128(key, 4));
     key = _mm_xor_si128(key, _mm_slli_si128(key, 4));
     key = _mm_xor_si128(key, _mm_slli_si128(key, 4));
     return _mm_xor_si128(key, keygened);
@@ -490,7 +474,7 @@ _mm_storeu_si128((__m128i*)ciphertext, encrypted);
 
 \begin{itemize}
     \item \textbf{Instruction Fusion}: Four transformations in one hardware operation
-    \item \textbf{Parallelism}: Dedicated circuits perform SubBytes, ShiftRows, MixColumns simultaneously
+    \item \textbf{Parallelism}: Dedicated circuits perform transformations simultaneously
     \item \textbf{Pipelining}: Multiple blocks can be in flight concurrently
     \item \textbf{No Memory Access}: All operations in registers, no cache thrashing
 \end{itemize}
@@ -510,22 +494,12 @@ The T-AES hardware implementation (encrypt\_aesni.cpp) mirrors the software stru
 
 \textbf{Block Processing}:
 
-\begin{lstlisting}[language=C++, caption=From encrypt\_aesni.cpp, breaklines=true, basicstyle=\footnotesize\ttfamily]
+\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
 AESNI aes_ni(key_size, n_rounds, key, tweak);
-
 for (size_t i = 0; i < all_blocks.size(); i++) {
     vector<uint8_t> current_block = all_blocks.at(i);
-    vector<uint8_t> ciphertext_block;
-
-    if (current_block.size() < 16) {
-        // Ciphertext stealing logic (same as software)
-        // ...
-        ciphertext_block = aes_ni.encrypt_block(current_block);
-    } else {
-        // Normal encryption with AES-NI
-        ciphertext_block = aes_ni.encrypt_block(current_block);
-    }
-
+    vector<uint8_t> ciphertext_block =
+        aes_ni.encrypt_block(current_block);
     if (TWEAK) {
         utils::increment_tweak(tweak_for_block);
     }
@@ -561,7 +535,7 @@ This section presents the results from the comprehensive test suite (\texttt{tes
 
 \subsection{Test Suite Overview}
 
-The automated test harness executes 150+ individual tests organized into six categories:
+The test suite executes 150+ individual tests organized into six categories:
 \begin{itemize}
     \item \textbf{Test 1}: Same implementation encryption/decryption without tweak (36 tests)
     \item \textbf{Test 2}: Same implementation encryption/decryption with tweak (36 tests)
@@ -596,8 +570,8 @@ All tests passed!
 
 All cross-compatibility tests passed, confirming:
 \begin{itemize}
-    \item Software encryption $\rightarrow$ Hardware decryption: PASS
-    \item Hardware encryption $\rightarrow$ Software decryption: PASS
+    \item Software encrypt $\rightarrow$ Hardware decrypt: PASS
+    \item Hardware encrypt $\rightarrow$ Software decrypt: PASS
     \item Identical ciphertext for identical inputs across implementations
     \item AES-NI correctly implements FIPS 197 specification
 \end{itemize}
@@ -641,7 +615,7 @@ AES-256 Hardware & 2.2 & 4.9x \\
 
 \section{Statistical Analysis: Tweak Avalanche Effect}
 
-The \texttt{stat} application measures the cryptographic avalanche property of the tweak modification. By incrementing the tweak and measuring Hamming distances between successive ciphertexts, we evaluate how well the tweak contributes to diffusion.
+The \texttt{stat} application measures tweak avalanche properties by computing Hamming distances between successive ciphertexts with incremented tweaks.
 
 \subsection{Methodology}
 
@@ -671,8 +645,8 @@ The \texttt{stat} application measures the cryptographic avalanche property of t
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.65\textwidth]{stat_histogram.pdf}
-\caption{Hamming distance distribution for tweak increments (2.55M measurements). Red line: observed mean (64.00 bits); green line: theoretical expectation (64.0 bits). Distribution follows binomial B(128, 0.5).}
+\includegraphics[width=0.50\textwidth]{stat_histogram.pdf}
+\caption{Hamming distance distribution. Red line: observed mean (64.00 bits); green line: theoretical (64.0 bits).}
 \label{fig:stat_histogram}
 \end{figure}
 
@@ -734,7 +708,7 @@ This section presents detailed performance measurements comparing T-AES implemen
 \begin{itemize}
     \item Buffer size: 4096 bytes (4KB - one memory page)
     \item Iterations: 100,000 per operation
-    \item Timing method: \texttt{clock\_gettime()} with \texttt{CLOCK\_MONOTONIC} (nanosecond precision)
+    \item Timing method: \texttt{clock\_gettime(CLOCK\_MONOTONIC)} with nanosecond precision
     \item Key sizes tested: 128, 192, 256 bits
     \item Tweak modes: with-tweak and no-tweak
     \item XTS comparison: OpenSSL 128-bit and 256-bit
@@ -946,7 +920,7 @@ This section presents a comprehensive analysis comparing software and hardware A
 
 \subsubsection{Instruction Count Comparison}
 
-\paragraph{\textbf{Software Implementation (per block}}:
+\paragraph{\textbf{Software Implementation (per block)}}:
 \begin{itemize}
     \item SubBytes: 16 table lookups + 16 stores = ~32 instructions
     \item ShiftRows: ~20 instructions (byte permutation)
@@ -961,7 +935,7 @@ This section presents a comprehensive analysis comparing software and hardware A
     \item Initial AddRoundKey: 1 \_mm\_xor\_si128
     \item 9 middle rounds: 9 × \_mm\_aesenc\_si128
     \item Final round: 1 × \_mm\_aesenclast\_si128
-    \item Load/store: 2 × \_mm\_loadu\_si128, 1 × \_mm\_storeu\_si128
+    \item Load/store: 3 SIMD load/store operations
     \item \textbf{AES-128 total}: ~14 instructions
 \end{itemize}
 
@@ -1043,30 +1017,32 @@ Tests passed: 12/12
 \end{verbatim}
 
 \textbf{Validation Method}:
-\begin{lstlisting}[language=bash, basicstyle=\footnotesize\ttfamily, breaklines=true]
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
 cat plaintext.bin | ./encrypt 128 "password" | \
     ./decrypt 128 "password" > output.bin
-cmp -s plaintext.bin output.bin  # Binary comparison
+cmp -s plaintext.bin output.bin
 \end{lstlisting}
 
 \subsubsection{Cross-Implementation Consistency}
 
 \textbf{Objective}: Ensure software and hardware produce identical ciphertext
 
+\vspace{0.3cm}
 \textbf{Results}:
-\begin{verbatim}
-[PASS] AES-128 software vs hardware without tweak
-[PASS] AES-128 software vs hardware with tweak
-[PASS] AES-192 software vs hardware without tweak
-[PASS] AES-192 software vs hardware with tweak
-[PASS] AES-256 software vs hardware without tweak
-[PASS] AES-256 software vs hardware with tweak
 
-Tests passed: 6/6
-\end{verbatim}
+\vspace{0.2cm}
+{\small
+\texttt{[PASS] AES-128 software vs hardware without tweak}\\
+\texttt{[PASS] AES-128 software vs hardware with tweak}\\
+\texttt{[PASS] AES-192 software vs hardware without tweak}\\
+\texttt{[PASS] AES-192 software vs hardware with tweak}\\
+\texttt{[PASS] AES-256 software vs hardware without tweak}\\
+\texttt{[PASS] AES-256 software vs hardware with tweak}\\
+\texttt{Tests passed: 6/6}
+}
 
 \textbf{Validation Method}:
-\begin{lstlisting}[language=bash, basicstyle=\footnotesize\ttfamily, breaklines=true]
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
 cat plaintext.bin | ./encrypt 128 "password" > cipher_sw.bin
 cat plaintext.bin | ./encrypt_aesni 128 "password" > cipher_hw.bin
 cmp -s cipher_sw.bin cipher_hw.bin
@@ -1086,25 +1062,25 @@ cmp -s cipher_sw.bin cipher_hw.bin
 
 \textbf{Objective}: Verify that wrong decryption key produces incorrect output
 
+\vspace{0.3cm}
 \textbf{Results}:
-\begin{verbatim}
-[PASS] AES-128 software wrong key (correctly fails)
-[PASS] AES-128 software wrong key with tweak (correctly fails)
-[PASS] AES-128 hardware wrong key (correctly fails)
-[PASS] AES-128 hardware wrong key with tweak (correctly fails)
-... (similar for 192, 256)
 
-Tests passed: 12/12 (negative tests)
-\end{verbatim}
+\vspace{0.2cm}
+{\small
+\texttt{[PASS] AES-128 software wrong key (correctly fails)}\\
+\texttt{[PASS] AES-128 software wrong key with tweak (correctly fails)}\\
+\texttt{[PASS] AES-128 hardware wrong key (correctly fails)}\\
+\texttt{[PASS] AES-128 hardware wrong key with tweak (correctly fails)}\\
+\texttt{... (similar for 192, 256)}\\
+\texttt{Tests passed: 12/12 (negative tests)}
+}
 
 \textbf{Test Logic}:
-\begin{lstlisting}[language=bash, basicstyle=\footnotesize\ttfamily, breaklines=true]
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
 cat plaintext.bin | ./encrypt 128 "correct_pwd" | \
     ./decrypt 128 "wrong_pwd" > output.bin
-
-# This should FAIL to match
 if ! cmp -s plaintext.bin output.bin; then
-    echo "PASS (correctly fails to decrypt)"
+    echo "PASS (correctly fails)"
 fi
 \end{lstlisting}
 
@@ -1120,17 +1096,19 @@ fi
 
 \textbf{Objective}: Verify tweak parameter affects encryption output
 
+\vspace{0.3cm}
 \textbf{Results}:
-\begin{verbatim}
-[PASS] AES-128 software wrong tweak (correctly fails)
-[PASS] AES-192 software wrong tweak (correctly fails)
-[PASS] AES-256 software wrong tweak (correctly fails)
-[PASS] AES-128 hardware wrong tweak (correctly fails)
-[PASS] AES-192 hardware wrong tweak (correctly fails)
-[PASS] AES-256 hardware wrong tweak (correctly fails)
 
-Tests passed: 6/6 (negative tests)
-\end{verbatim}
+\vspace{0.2cm}
+{\small
+\texttt{[PASS] AES-128 software wrong tweak (correctly fails)}\\
+\texttt{[PASS] AES-192 software wrong tweak (correctly fails)}\\
+\texttt{[PASS] AES-256 software wrong tweak (correctly fails)}\\
+\texttt{[PASS] AES-128 hardware wrong tweak (correctly fails)}\\
+\texttt{[PASS] AES-192 hardware wrong tweak (correctly fails)}\\
+\texttt{[PASS] AES-256 hardware wrong tweak (correctly fails)}\\
+\texttt{Tests passed: 6/6 (negative tests)}
+}
 
 \textbf{Significance}:
 \begin{itemize}
@@ -1148,22 +1126,24 @@ Tests passed: 6/6 (negative tests)
 
 \textbf{Test Data}: "Irregular size test!!" (23 bytes)
 
+\vspace{0.3cm}
 \textbf{Results}:
-\begin{verbatim}
-[PASS] AES-128 software irregular size (ciphertext stealing)
-[PASS] AES-128 software irregular size with tweak (ciphertext stealing)
-[PASS] AES-128 hardware irregular size (ciphertext stealing)
-[PASS] AES-128 hardware irregular size with tweak (ciphertext stealing)
-... (similar for 192, 256)
 
-Tests passed: 12/12
-\end{verbatim}
+\vspace{0.2cm}
+{\small
+\texttt{[PASS] AES-128 software irregular size}\\
+\texttt{[PASS] AES-128 software irregular size with tweak}\\
+\texttt{[PASS] AES-128 hardware irregular size}\\
+\texttt{[PASS] AES-128 hardware irregular size with tweak}\\
+\texttt{... (similar for 192, 256)}\\
+\texttt{Tests passed: 12/12}
+}
 
 \textbf{Length Verification}:
-\begin{lstlisting}[language=bash, basicstyle=\footnotesize\ttfamily, breaklines=true]
-INPUT_SIZE=$(wc -c < irregular.txt)   # 23 bytes
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
+INPUT_SIZE=$(wc -c < irregular.txt)
 cat irregular.txt | ./encrypt 128 "pwd" > cipher.bin
-CIPHER_SIZE=$(wc -c < cipher.bin)     # 23 bytes
+CIPHER_SIZE=$(wc -c < cipher.bin)
 [ $INPUT_SIZE -eq $CIPHER_SIZE ] && echo "Length preserved"
 \end{lstlisting}
 
@@ -1294,25 +1274,25 @@ As cryptographic workloads continue to grow in importance for data security, pri
 This implementation follows NIST FIPS 197 specifications and incorporates best practices from cryptographic engineering literature. The project structure was inspired by various open-source AES implementations and academic resources on hardware acceleration.
 
 \begin{thebibliography}{00}
-\bibitem{fips197} National Institute of Standards and Technology, ``Advanced Encryption Standard (AES),'' FIPS PUB 197, November 2001. Available: \url{https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.197.pdf}
+\bibitem{fips197} NIST, ``Advanced Encryption Standard (AES),'' FIPS PUB 197, 2001.
 
-\bibitem{aeswiki} ``Advanced Encryption Standard,'' Wikipedia, The Free Encyclopedia. Available: \url{https://en.wikipedia.org/wiki/Advanced_Encryption_Standard}
+\bibitem{aeswiki} ``Advanced Encryption Standard,'' Wikipedia Encyclopedia.
 
-\bibitem{intelwp} Intel Corporation, ``Advanced Encryption Standard (AES) Instructions Set,'' White Paper, September 2012. Available: \url{https://www.intel.com/content/dam/develop/external/us/en/documents/aes-wp-2012-09-22-v01-165683.pdf}
+\bibitem{intelwp} Intel Corporation, ``AES Instructions Set,'' White Paper, 2012.
 
-\bibitem{aesni} Intel Corporation, ``Intel Advanced Encryption Standard Instructions (AES-NI),'' 2010. Available: \url{https://www.intel.com/content/www/us/en/developer/articles/technical/advanced-encryption-standard-instructions-aes-ni.html}
+\bibitem{aesni} Intel Corporation, ``Intel AES-NI,'' 2010.
 
-\bibitem{gueron} Shay Gueron, ``Intel Advanced Encryption Standard (AES) New Instructions Set,'' Intel Software Network, 2010. Available: \url{https://www.intel.com/content/dam/doc/white-paper/advanced-encryption-standard-new-instructions-set-paper.pdf}
+\bibitem{gueron} Shay Gueron, ``AES New Instructions Set,'' Intel Software Network, 2010.
 
-\bibitem{sergeyaes} Sergey Bel, ``AES Implementation,'' GitHub Repository. Available: \url{https://github.com/SergeyBel/AES}
+\bibitem{sergeyaes} Sergey Bel, ``AES Implementation,'' GitHub Repository.
 
-\bibitem{cts} National Institute of Standards and Technology, ``Recommendation for Block Cipher Modes of Operation: Three Variants of Ciphertext Stealing for CBC Mode,'' NIST Special Publication 800-38A Addendum, October 2010.
+\bibitem{cts} NIST, ``Block Cipher Modes: Ciphertext Stealing,'' SP 800-38A Addendum, 2010.
 
-\bibitem{openssl} OpenSSL Software Foundation, ``OpenSSL: Cryptography and SSL/TLS Toolkit.'' Available: \url{https://www.openssl.org/}
+\bibitem{openssl} OpenSSL Software Foundation, ``OpenSSL Cryptography Toolkit,'' 2024.
 
-\bibitem{daemen} Joan Daemen and Vincent Rijmen, ``The Design of Rijndael: AES - The Advanced Encryption Standard,'' Springer-Verlag, 2002.
+\bibitem{daemen} J. Daemen and V. Rijmen, ``The Design of Rijndael,'' Springer-Verlag, 2002.
 
-\bibitem{nistmodes} National Institute of Standards and Technology, ``Recommendation for Block Cipher Modes of Operation,'' NIST Special Publication 800-38A, 2001 Edition.
+\bibitem{nistmodes} NIST, ``Block Cipher Modes of Operation,'' SP 800-38A, 2001.
 \end{thebibliography}
 
 \end{document}

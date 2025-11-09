@@ -281,7 +281,11 @@ MIT License - See `LICENSE` file for details.
 
 ---
 
-## Author
+## Authors
+
+**Contributors:**
+- **Henrique Freitas** (114990)
+- **Gabriel** (113682)
 
 Applied Cryptography Project
 Computer Architecture

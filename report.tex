@@ -33,99 +33,124 @@ November 2025}}
 
 \maketitle
 
+% for the whole project, not abstract when we refer something or a program we should refer the name of the script for example if were talking about our aes we say we have the structure in aes.hpp and call it in encrypt, we just need to refer each one once, for example also speaking about the speed we should say what it does and the script speed.cpp and how to call it ./bin/speed and also the make file we have
+% all the -- that are used instead of commas shoould be removed for example AES-NI is correct but having equivalent-given in the place of a coma is wrong
+% we have 6 pages at the moment, maybe we can put snipets of the code in some places when explaining the code, and also explain a bit more the theory behind it
+
+% include that we are implementing AES in cpp with a tweak and explain briefly the tweak in abstract, arythmetic adition
+% refer that we also provide togehter with that the two functinos speed and stat where we prove the things given to us in the pdf explaining the work
+% explain that we also compare with xts but ofc in an abstract way
 \begin{abstract}
-This report presents T-AES, a dual-implementation of the Advanced Encryption Standard (AES) featuring both pure software and hardware-accelerated (AES-NI) versions. The implementation supports AES-128, AES-192, and AES-256 encryption in ECB mode with optional tweak-based counter functionality. A key feature is the ciphertext stealing (CTS) technique that handles non-block-aligned data without padding. The project includes comprehensive testing validating correctness across all operational modes and demonstrates significant performance improvements when utilizing AES-NI instructions. Performance comparisons show 3-5x speedup with hardware acceleration while maintaining cryptographic equivalence between both implementations.
+This report presents T-AES, a tweakable Advanced Encryption Standard implementation featuring both software and hardware-accelerated (AES-NI) versions. The tweak, a 128-bit value combined via arithmetic addition (mod $2^{128}$) with the middle round key, enables deterministic variation across encrypted blocks without requiring secrecy, similar in concept to XTS mode. The implementation supports AES-128, AES-192, and AES-256 in an ECB-based counter mode where the tweak increments per block. Ciphertext stealing handles non-block-aligned data without padding. The project includes encrypt and decrypt command-line applications, a speed benchmark application (speed.cpp) comparing T-AES software, T-AES AES-NI, and OpenSSL XTS implementations, and a statistical analysis application (stat.cpp) that measures Hamming distance distributions to validate the cryptographic properties of the tweak. Both T-AES implementations are validated to produce identical outputs, demonstrating cryptographic equivalence.
 \end{abstract}
 
 \begin{IEEEkeywords}
 AES, encryption, hardware acceleration, AES-NI, ciphertext stealing, ECB mode, performance comparison
 \end{IEEEkeywords}
 
+% replace the facto for something else
+% refer xts and cts and the tweak and xtx 128 and 256
 \section{Introduction}
 
-The Advanced Encryption Standard (AES) has become the de facto symmetric encryption algorithm since its standardization by NIST in 2001.
+The Advanced Encryption Standard (AES) has been the widely adopted symmetric encryption algorithm since its standardization by NIST in 2001. Tweakable block ciphers extend the standard AES model by introducing a tweak parameter, a non-secret value that modifies the encryption without requiring a key change. A prominent example is XTS (XEX-based Tweaked-codebook mode with ciphertext Stealing), used in full-disk encryption, which applies the tweak at the input and output of AES-128 and includes ciphertext stealing to handle non-block-aligned data.
 
-Modern processors have evolved to include specialized instructions for AES operations. Intel's AES New Instructions (AES-NI), introduced in 2010, provide hardware-level acceleration for AES encryption and decryption. These instructions offer substantial performance improvements while maintaining resistance to timing-based side-channel attacks that can affect software implementations.
+This project implements T-AES, a variant where the tweak is inserted in the middle of the AES substitution-permutation network (at the middle round key) rather than at input/output. Combined with an ECB-mode counter that increments the tweak per block and ciphertext stealing for final blocks, T-AES provides a complete tweakable encryption scheme. The implementation follows NIST FIPS 197 specifications and includes support for all three standard key sizes (128, 192, and 256 bits).
 
-This project implements AES encryption and decryption in software and hardware-accelerated forms, in order to compare both approaches in terms of performance. The implementation follows NIST FIPS 197 specifications and includes support for all three standard key sizes (128, 192, and 256 bits). A notable feature is the ciphertext stealing technique, which eliminates the need for padding when processing data that doesn't align to 16-byte block boundaries.
+Modern processors have evolved to include specialized instructions for AES operations. Intel's AES New Instructions (AES-NI), introduced in 2010, provide hardware-level acceleration for AES encryption and decryption. These instructions offer substantial performance improvements while maintaining resistance to timing-based side-channel attacks that can affect software implementations. This project implements both software and hardware-accelerated versions to compare performance approaches and validate cryptographic equivalence across architectures. A notable feature is the ciphertext stealing technique, which eliminates the need for padding when processing data that doesn't align to 16-byte block boundaries.
 
+% and also achieving cross encryptino and decryption with of course the same key and tweak if done with tht tweak
 \section{Baseline Requirements and Specifications}
 
-The T-AES project requires the use of command-line use and integration with Unix-style tool chains for simplicity and modularity in the encryption and decryption of plaintext .
+The T-AES project was designed with clear functional and implementation requirements to ensure modularity, performance, and strict adherence to the AES standard. The goal was to create a command-line tool capable of encrypting and decrypting data streams using both software and hardware-accelerated versions of AES, while maintaining identical cryptographic behavior in both implementations.
 
+
+% if not exmplained further explain a bit better what each thing is, careful not to go over 8 pages, the lokoup tables, what are the bitwise operations, but i think they are written after
 \subsection{Functional Requirements}
 
-\subsubsection{Input/Output Specification}
-\begin{itemize}
-    \item \textbf{Binary I/O}: All data must be read from standard input (stdin) and written to standard output (stdout) in binary format
-    \item \textbf{Stream Processing}: The implementation must handle streaming data without requiring the entire file to be loaded into memory
-    \item \textbf{No File Dependencies}: Direct file operations are avoided; all I/O occurs through standard streams
-\end{itemize}
+The system operates entirely through command-line interaction, using Unix-style pipelines to maximize flexibility and interoperability. Instead of relying on file-based input and output, all data is processed as binary streams through \texttt{stdin} and \texttt{stdout}. This approach allows the encryption and decryption of data of arbitrary size without the need to load entire files into memory, making the system suitable for stream-based processing and integration with other command-line utilities.
 
-\subsubsection{Encryption Algorithm}
-\begin{itemize}
-    \item \textbf{Key Sizes}: Support for 128-bit, 192-bit, and 256-bit keys
-    \item \textbf{Block Size}: Fixed 128-bit (16-byte) blocks as per AES standard
-    \item \textbf{Operational Mode}: ECB (Electronic Codebook) mode for independent block encryption
-    \item \textbf{Optional Enhancement}: Tweak parameter support for counter-based mode.
-\end{itemize}
+The encryption algorithm supports the three key sizes defined in the AES standard: 128, 192, and 256 bits. The block size is fixed at 128 bits (16 bytes), following the FIPS 197 specification. The tweak is combined with the round key via arithmetic addition (mod $2^{128}$) at the middle round (RK5 for AES-128, RK6 for AES-192, RK7 for AES-256). A practical advantage of using arithmetic addition is that during decryption, the same tweak value is added to the round key without requiring subtraction. By default, T-AES operates in Electronic Codebook (ECB) mode, where each block is processed independently. An optional tweak parameter can be provided to enable counter-mode operation where the tweak increments per block, enabling deterministic variation between otherwise identical plaintext blocks. The applications detect this through argument count, as shown in Listing~\ref{lst:arg_parsing}:
 
-\subsubsection{Ciphertext Stealing Requirement}
-When input data length is not a multiple of 16 bytes, the implementation must use ciphertext stealing instead of padding:
-\begin{itemize}
-    \item \textbf{No Padding}: Avoid PKCS\#7 or other padding schemes
-    \item \textbf{Length Preservation}: Ciphertext length must exactly equal plaintext length
-    \item \textbf{CTS Implementation}: Handle the last two blocks specially when the final block is partial
-\end{itemize}
+\vspace{0.3cm}
+\begin{lstlisting}[language=C++, caption=Tweak Detection via Argument Count (encrypt.cpp), label=lst:arg_parsing, basicstyle=\scriptsize\ttfamily, breaklines=true]
+if (argc < 3) {
+    cout << "Args: <aes_size> <password> [tweak_password]" << endl;
+    return 1;
+}
+if (argc == 4) {
+    TWEAK = true;  // Counter mode enabled
+}
+\end{lstlisting}
+\vspace{0.05cm}
+
+Handling plaintext that is not a multiple of 16 bytes is achieved using ciphertext stealing (CTS). Unlike padding schemes such as PKCS\#7, CTS preserves the exact length of the plaintext in the resulting ciphertext. When the final block is incomplete, the algorithm borrows bytes from the previous ciphertext block to construct a complete final block. The core encryption logic in encrypt.cpp implements this as follows:
+
+\vspace{0.05cm}
+\begin{lstlisting}[language=C++, caption=Ciphertext Stealing Encryption (encrypt.cpp), label=lst:cts_enc, basicstyle=\scriptsize\ttfamily, breaklines=true]
+if (current_block.size() < 16) {
+    // Incomplete final block: borrow from previous ciphertext
+    size_t steal_size = 16 - current_block.size();
+    vector<uint8_t> cipher_to_append(
+        previous_encrypted_block.end() - steal_size,
+        previous_encrypted_block.end());
+    current_block.insert(current_block.end(),
+        cipher_to_append.begin(), cipher_to_append.end());
+
+    ciphertext_block = aes.encrypt_block(current_block);
+    cipherBlocks[i - 1] = vector<uint8_t>(
+        previous_encrypted_block.begin(),
+        previous_encrypted_block.end() - steal_size);
+    cipherBlocks.push_back(ciphertext_block);
+}
+\end{lstlisting}
+\vspace{0.05cm}
+
+This technique maintains proper block alignment without introducing artificial data, ensuring data integrity and enabling decryption to perfectly reconstruct the original plaintext.
 
 \subsection{Implementation Requirements}
 
-\subsubsection{Dual Implementation}
-\begin{itemize}
-    \item \textbf{Software Version}: Pure C++ implementation using lookup tables and bitwise operations
-    \item \textbf{Hardware Version}: AES-NI accelerated implementation using Intel intrinsics
-    \item \textbf{Functional Equivalence}: Both versions must produce identical ciphertext for identical inputs and maintain cryptographic equivalence
-    \item \textbf{Separate Binaries}: Build system generates distinct executables for each implementation
-\end{itemize}
+Two independent implementations were developed to provide a fair comparison between software and hardware encryption approaches. The software version is written entirely in C++, using lookup tables, bitwise operations, and standard arithmetic to implement the AES transformations. The hardware version, on the other hand, leverages Intel’s AES-NI instruction set to perform most AES operations directly in the processor, significantly reducing instruction count and latency.
 
-\subsubsection{Key Derivation}
-\begin{itemize}
-    \item \textbf{Text Input}: Accept password as command-line string argument
-    \item \textbf{Hash Function}: Use SHA-256 to derive fixed-length key from password
-    \item \textbf{Key Extraction}: Extract required key bytes (16, 24, or 32) from hash output
-    \item \textbf{Tweak Derivation}: Uses the same process of the password for the optional tweak parameter
-\end{itemize}
+Both implementations were designed to be functionally equivalent. Given the same plaintext, key, and optional tweak, they must produce identical ciphertext. To ensure modularity and maintainability, the build system generates separate binaries for the software and hardware versions. This separation allows independent benchmarking and validation while keeping the codebase consistent across both modes.
+
+Key derivation in T-AES is performed through a simple yet secure process. The user provides a password as a command-line argument, which is then hashed using SHA-256 to generate a fixed-length 256-bit key. Depending on the chosen AES mode, the appropriate number of bytes (16, 24, or 32) is extracted from the hash to serve as the encryption key. The same process can be repeated to derive the optional tweak value when specified, ensuring deterministic and reproducible behavior across executions.
+
+\subsubsection{Command-Line Interface}
+
+The encrypt and decrypt applications (encrypt.cpp/decrypt.cpp for software, encrypt\_aesni.cpp/decrypt\_aesni.cpp for hardware) accept arguments in the format:
+
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
+./bin/encrypt <aes_size> <password> [tweak_password]
+./bin/decrypt <aes_size> <password> [tweak_password]
+./bin/encrypt_aesni <aes_size> <password> [tweak_password]
+./bin/decrypt_aesni <aes_size> <password> [tweak_password]
+\end{lstlisting}
+
+Where \texttt{aes\_size} is 128, 192, or 256. The third argument is optional. When provided, it enables counter-mode operation with tweak incrementing per block. Data flows through standard Unix pipes, allowing integration with other tools. Example usage for software AES without tweak:
+
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
+./bin/encrypt 128 mypassword < plaintext.bin > ciphertext.bin
+./bin/decrypt 128 mypassword < ciphertext.bin > decrypted.bin
+\end{lstlisting}
+
+For hardware-accelerated encryption with tweak:
+
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
+./bin/encrypt_aesni 256 password1 password2 < plaintext.bin > cipher.bin
+./bin/decrypt_aesni 256 password1 password2 < cipher.bin > plaintext.bin
+\end{lstlisting}
+
+\subsubsection{Building}
+
+All applications are built automatically using the provided Makefile. Running \texttt{make} (or \texttt{make all}) compiles all six programs: encrypt, decrypt, encrypt\_aesni, decrypt\_aesni, speed, and stat. The build system automatically applies appropriate compiler flags: standard C++17 with optimizations (-O3) for software implementations, and additional AES-NI flags (-maes -msse4.1) for hardware-accelerated versions. OpenSSL libraries are linked automatically via \texttt{-lssl -lcrypto}. All binaries are placed in the \texttt{bin/} directory.
 
 \subsection{Validation Requirements}
-\begin{itemize}
-    \item \textbf{Round-trip Testing}: Verify encrypt-then-decrypt recovers original plaintext
-    \item \textbf{Cross-validation}: Ensure software and hardware versions produce the same ciphertext
-    \item \textbf{Security Testing}: Validate that wrong keys/tweaks fail to decrypt correctly
-    \item \textbf{Edge Cases}: Test with various input sizes including non-block-aligned data
-    \item \textbf{All Combinations}: Test all permutations of key sizes, tweaks, and implementations
-    \item \textbf{Interleave implementations}: The hardware and software implementations must produce the same output if provided with the same arguments and plaintext.
-\end{itemize}
 
-\subsection{Technical Characteristics}
+Validation was a central aspect of the project to guarantee correctness, equivalence, and robustness. The system was tested to ensure that encrypting and then decrypting any given input reproduces the original plaintext exactly, verifying the accuracy of both implementations. Cross-validation was also performed, where data encrypted with the software version was decrypted using the hardware version and vice versa, confirming complete compatibility.
 
-\begin{itemize}
-    \item \textbf{Platform}: x86\_64 architecture for hardware-accelerated version
-    \item \textbf{Compiler}: GCC/G++ with C++17 standard support
-    \item \textbf{Dependencies}: OpenSSL libraries for SHA-256 hashing
-    \item \textbf{Build System}: Makefile-based compilation with separate targets
-    \item \textbf{CPU Features}: AES-NI and SSE4.1 support required for hardware version
-\end{itemize}
+Additional tests were conducted with incorrect keys and tweaks to verify that decryption fails gracefully without producing false positives. Edge cases, such as empty inputs, single-byte files, and non-block-aligned data, were thoroughly tested to confirm the proper functioning of ciphertext stealing. Finally, all combinations of key sizes, tweaks, and implementation modes were tested to ensure consistent behavior under all supported configurations.
 
-\subsection{Project Deliverables}
-
-\begin{itemize}
-    \item Encrypt Script
-    \item Decrypt Script
-    \item Encrypt in AESNI Script
-    \item Decrypt in AESNI Script
-    \item Testing Script
-    \item Validation Script
-\end{itemize}
+Overall, these baseline requirements established a strong foundation for the development of T-AES, ensuring that both implementations would be secure, efficient, and directly comparable in terms of performance and correctness.
 
 \section{Software Implementation Details}
 
@@ -162,8 +187,6 @@ SubBytes provides non-linearity by substituting each byte using the AES S-box.
     \item Simple array indexing: \texttt{state[i] = sbox[state[i]]} performs substitution
 \end{itemize}
 
-\textbf{Security Consideration}: Table lookups can leak timing information through cache side-channels. Accessing \texttt{sbox[k]} where $k$ depends on secret data may reveal information to attackers monitoring cache patterns.
-
 \subsubsection{ShiftRows Transformation}
 
 ShiftRows performs cyclic shifts on each row of the state matrix to provide diffusion.
@@ -184,7 +207,7 @@ MixColumns provides diffusion by mixing bytes within each column using Galois Fi
 
 \textbf{Mathematical Foundation}:
 
-Each column is treated as a polynomial and multiplied by the fixed polynomial $c(x) = \{\}x^3 + \{01\}x^2 + \{01\}x + \{02\}$ in GF($2^8$).
+Each column is treated as a polynomial and multiplied by the fixed polynomial $c(x) \{03\}x^3 + \{01\}x^2 + \{01\}x + \{02\}$ in GF($2^8$).
 
 For column $[a_0, a_1, a_2, a_3]^T$, the output is:
 
@@ -305,54 +328,47 @@ Decryption uses inverse transformations in reverse order:
 
 \subsection{Ciphertext Stealing Implementation}
 
-Ciphertext stealing handles the case when total plaintext is not a multiple of 16 bytes.
+Ciphertext stealing (CTS) enables secure encryption of data that does not align to block boundaries without padding. The encrypt.cpp and decrypt.cpp applications implement the ECB-based CTS approach described in NIST standards.
 
-\textbf{Encryption with CTS}:
-
-Given plaintext blocks $P_0, P_1, ..., P_{n-1}, P_n$ where $P_n$ is partial (M < 16 bytes):
+\textbf{Encryption Algorithm}: Given plaintext blocks $P_0, P_1, ..., P_{n-1}, P_n$ where $P_n$ is partial (M < 16 bytes), encryption proceeds as:
 
 \begin{algorithmic}
 \STATE Encrypt all full blocks normally: $C_0, C_1, ..., C_{n-1}$
 \STATE $steal\_size \gets 16 - M$
-\STATE $borrowed \gets \text{last } steal\_size \text{ bytes of } C_{n-1}$
-\STATE $P_n' \gets P_n \parallel borrowed$ (now 16 bytes)
-\STATE $C_n \gets \text{Encrypt}(P_n')$ (full block)
+\STATE Concatenate $P_n$ with last $steal\_size$ bytes of $C_{n-1}$ to form 16-byte block
+\STATE $C_n \gets \text{Encrypt}(P_n \parallel \text{tail of } C_{n-1})$
 \STATE $C_{n-1}' \gets \text{first } M \text{ bytes of } C_{n-1}$ (truncated)
 \STATE Output: $C_0, C_1, ..., C_{n-1}', C_n$
 \end{algorithmic}
 
-Implementation (from encrypt.cpp:113-128):
+\textbf{Decryption Algorithm}: The symmetric reverse process is implemented in decrypt.cpp. Upon detecting the partial final block (size $< 16$ bytes), the decryption reconstructs the full ciphertext block by combining the truncated previous block with the current bytes, decrypts it to recover both plaintext and stolen bytes, reconstructs the penultimate ciphertext, and decrypts it to recover the previous plaintext block. This process, shown in decrypt.cpp lines 119-161, ensures the original plaintext is perfectly reconstructed without data loss.
 
-\textbf{Decryption with CTS}: The decryption process reverses these steps, detecting the partial block, decrypting the full final block to recover both the plaintext and stolen bytes, reconstructing the penultimate block, and decrypting it.
+\subsection{Counter-Based Tweak Increment}
 
-\subsection{Performance Characteristics}
+When the optional tweak password is provided, the applications activate counter mode where the tweak increments per encrypted block. Both encrypt.cpp and encrypt\_aesni.cpp implement this mechanism identically. After each block encryption, the tweak is incremented as a 128-bit big-endian integer using the utility function from utils.hpp:
 
-\textbf{Time Complexity}:
-\begin{itemize}
-    \item Per round: O(1) - fixed 16-byte state
-    \item Total: O($N_r$) where $N_r$ is number of rounds
-    \item Key expansion: O($N_k \times N_r$) where $N_k$ is key size in words
-\end{itemize}
+\vspace{0.05cm}
+\begin{lstlisting}[language=C++, caption=Counter Mode Tweak Increment, label=lst:tweak_increment, basicstyle=\scriptsize\ttfamily, breaklines=true]
+vector<uint8_t> tweak_for_block = tweak;
 
-\textbf{Space Complexity}:
-\begin{itemize}
-    \item S-box tables: 256 bytes
-    \item Inverse S-box: 256 bytes
-    \item Multiplication tables: ~1 KB
-    \item Expanded key schedule: 176 bytes (AES-128), 208 bytes (AES-192), 240 bytes (AES-256)
-\end{itemize}
+for (size_t i = 0; i < all_blocks.size(); i++) {
+    // Encrypt current block with current tweak
+    ciphertext_block = aes.encrypt_block(current_block);
+    cipherBlocks.push_back(ciphertext_block);
 
-\textbf{Bottlenecks}:
-\begin{itemize}
-    \item Memory access for table lookups
-    \item Cache misses on S-box accesses
-    \item Branch prediction in GF multiplication
-    \item Sequential processing (no parallelism within a block)
-\end{itemize}
+    // Increment tweak for next block
+    if (TWEAK) {
+        utils::increment_tweak(tweak_for_block);
+    }
+}
+\end{lstlisting}
+\vspace{0.05cm}
+
+The increment\_tweak function (utils.hpp) treats the tweak as a 128-bit big-endian integer with carry propagation, ensuring unique tweak values across blocks.
 
 \section{Hardware Implementation Details}
 
-The hardware-accelerated implementation leverages Intel AES-NI (AES New Instructions) introduced in 2010. These specialized CPU instructions perform AES operations directly in hardware, providing significant performance and security advantages.
+The hardware-accelerated implementation leverages Intel AES-NI (AES New Instructions) introduced in 2010. These specialized CPU instructions perform AES operations directly in hardware, providing significant performance and security advantages. The implementations (encrypt\_aesni.cpp and decrypt\_aesni.cpp) use the AESNI class from include/AESNI.hpp, which wraps the AES-NI intrinsics while maintaining identical encryption semantics to the software version.
 
 \subsection{AES-NI Instruction Set}
 
@@ -405,6 +421,7 @@ Intel AES-NI provides six instructions specifically for AES operations, operatin
 
 \textbf{Basic Encryption Flow}:
 
+\vspace{0.5cm}
 \begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
 __m128i aesni_encrypt_block(__m128i plaintext,
                            __m128i* key_schedule) {
@@ -418,36 +435,28 @@ __m128i aesni_encrypt_block(__m128i plaintext,
 }
 \end{lstlisting}
 
-\textbf{Key Observations}:
-\begin{itemize}
-    \item Only 12 instructions for AES-128 encryption (1 XOR + 9 AESENC + 1 AESENCLAST + 1 return)
-    \item Compare to software: ~160 instructions per block (4 transformations × 10 rounds)
-    \item Hardware parallelism: Multiple transformations occur simultaneously in silicon
-    \item No conditional branches: Constant-time execution
-\end{itemize}
-
 \subsection{Hardware Key Expansion}
 
 Key expansion still requires some software logic, but AESKEYGENASSIST accelerates the complex parts.
 
 \textbf{AES-128 Key Schedule Generation}:
 
-\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
-void aesni_key_expansion_128(uint8_t* userkey,
-                             __m128i* key_schedule) {
-    __m128i key = _mm_loadu_si128((__m128i*)userkey);
-    key_schedule[0] = key;
-    key = key_expansion_128(key,
-          _mm_aeskeygenassist_si128(key, 0x01));
-    key_schedule[1] = key;
+\vspace{0.05cm}
+\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\scriptsize\ttfamily]
+void aesni_key_expansion_128(uint8_t* key, __m128i* ks) {
+    __m128i k = _mm_loadu_si128((__m128i*)key);
+    ks[0] = k;
+    k = key_expansion_128(k, _mm_aeskeygenassist_si128(k, 0x01));
+    ks[1] = k;
 }
-__m128i key_expansion_128(__m128i key, __m128i keygened) {
-    keygened = _mm_shuffle_epi32(keygened, 0xFF);
+__m128i key_expansion_128(__m128i key, __m128i kg) {
+    kg = _mm_shuffle_epi32(kg, 0xFF);
     key = _mm_xor_si128(key, _mm_slli_si128(key, 4));
     key = _mm_xor_si128(key, _mm_slli_si128(key, 4));
-    return _mm_xor_si128(key, keygened);
+    return _mm_xor_si128(key, kg);
 }
 \end{lstlisting}
+\vspace{0.05cm}
 
 \subsection{Register Usage and Data Flow}
 
@@ -488,211 +497,45 @@ _mm_storeu_si128((__m128i*)ciphertext, encrypted);
     \item \textbf{Side-Channel Protection}: Hardware circuits don't exhibit timing variations based on data
 \end{itemize}
 
-\subsection{Implementation in T-AES}
-
-The T-AES hardware implementation (encrypt\_aesni.cpp) mirrors the software structure but uses AES-NI instructions for the core encryption operations.
-
-\textbf{Block Processing}:
-
-\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
-AESNI aes_ni(key_size, n_rounds, key, tweak);
-for (size_t i = 0; i < all_blocks.size(); i++) {
-    vector<uint8_t> current_block = all_blocks.at(i);
-    vector<uint8_t> ciphertext_block =
-        aes_ni.encrypt_block(current_block);
-    if (TWEAK) {
-        utils::increment_tweak(tweak_for_block);
-    }
-}
-\end{lstlisting}
-
-\textbf{Key Points}:
-\begin{itemize}
-    \item Ciphertext stealing logic identical to software version
-    \item Only the core \texttt{encrypt\_block()} uses AES-NI instructions
-    \item Maintains functional equivalence with software implementation
-    \item All other logic (I/O, CTS, tweak increment) unchanged
-\end{itemize}
-
-\subsection{Compiler Considerations}
-
-\textbf{Required Compiler Flags}:
-\begin{itemize}
-    \item \texttt{-maes}: Enable AES-NI intrinsics
-    \item \texttt{-msse4.1}: Enable SSE4.1 instructions (required for some operations)
-    \item \texttt{-O2} or \texttt{-O3}: Enable optimizations for best performance
-\end{itemize}
-
-\textbf{Required Headers}:
-\begin{lstlisting}[language=C++]
-#include <wmmintrin.h>  // AES-NI intrinsics
-#include <immintrin.h>  // General intrinsics
-\end{lstlisting}
-
-\section{Comprehensive Testing Results}
-
-This section presents the results from the comprehensive test suite (\texttt{test\_comprehensive.sh}) that validates correctness across all operational modes, key sizes, and edge cases.
+\section{Comprehensive Testing and Validation}
 
 \subsection{Test Suite Overview}
 
-The test suite executes 150+ individual tests organized into six categories:
-\begin{itemize}
-    \item \textbf{Test 1}: Same implementation encryption/decryption without tweak (36 tests)
-    \item \textbf{Test 2}: Same implementation encryption/decryption with tweak (36 tests)
-    \item \textbf{Test 3}: Cross-implementation compatibility without tweak (36 tests)
-    \item \textbf{Test 4}: Cross-implementation compatibility with tweak (36 tests)
-    \item \textbf{Test 5}: Edge cases (empty files, irregular sizes) (24 tests)
-    \item \textbf{Test 6}: Performance measurements on large files (6 tests)
-\end{itemize}
+The test suite (\texttt{test\_comprehensive.sh}) systematically validates T-AES implementations across all operational modes and configurations. The script executes 150+ tests covering three AES key sizes (128, 192, 256 bits), six plaintext sizes (16, 32, 64, 128, 256, 1024 bytes), both software and AES-NI implementations, and both tweaked and non-tweaked modes.
 
-\textbf{Test Configuration}:
-\begin{itemize}
-    \item Key sizes: 128, 192, 256 bits
-    \item Text sizes: 16, 32, 64, 128, 256, 1024 bytes
-    \item Implementations: Software (AES), Hardware (AES-NI)
-    \item Modes: With tweak and without tweak
-\end{itemize}
+Testing is organized into six stages with corresponding test groups. The core validation logic (shown in Listing~\ref{lst:test_core}) encrypts plaintext, decrypts the ciphertext, and verifies byte-for-byte equivalence:
 
-\subsection{Test Results Summary}
+\vspace{0.05cm}
+\begin{lstlisting}[language=bash, caption=Core Test Loop Structure, label=lst:test_core, basicstyle=\scriptsize\ttfamily, breaklines=true]
+for sz in 128 192 256; do
+    for tsz in 16 32 64 128 256 1024; do
+        ./bin/encrypt $sz $PWD < plain > cipher.bin
+        ./bin/decrypt $sz $PWD < cipher.bin > out
+        cmp plain out && echo "PASS" || echo "FAIL"
+        ./bin/encrypt $sz $PWD < plain > cipher.bin
+        ./bin/decrypt_aesni $sz $PWD < cipher.bin > out
+        cmp plain out && echo "PASS" || echo "FAIL"
+    done
+done
+\end{lstlisting}
+\vspace{0.05cm}
 
-\textbf{Overall Results}:
-\begin{verbatim}
-Total tests run: 150
-Passed: 150
-Failed: 0
+Stages progress through: (1) same-implementation correctness without tweaks (36 tests), (2) same-implementation with tweaks (36 tests), (3) cross-implementation without tweaks (36 tests), (4) cross-implementation with tweaks (36 tests), (5) edge cases including empty files and non-block-aligned data (24 tests), and (6) performance validation (6 tests). Each implementation must produce output identical to the original plaintext, ensuring correctness and cryptographic equivalence between software and hardware versions.
 
-All tests passed!
-\end{verbatim}
+\subsection{Statistical Validation of Tweak Properties}
 
-\subsection{Key Findings}
-
-\subsubsection{Cross-Implementation Validation}
-
-All cross-compatibility tests passed, confirming:
-\begin{itemize}
-    \item Software encrypt $\rightarrow$ Hardware decrypt: PASS
-    \item Hardware encrypt $\rightarrow$ Software decrypt: PASS
-    \item Identical ciphertext for identical inputs across implementations
-    \item AES-NI correctly implements FIPS 197 specification
-\end{itemize}
-
-\subsubsection{Edge Case Handling}
-
-\textbf{Empty File Test}: Both implementations correctly handle zero-length input
-\begin{verbatim}
-Input: 0 bytes
-Output: 0 bytes
-Round-trip: PASS
-\end{verbatim}
-
-\textbf{Irregular Size Test} (17 bytes - requires ciphertext stealing):
-\begin{verbatim}
-Input: 17 bytes
-Ciphertext: 17 bytes (no padding)
-Round-trip: PASS
-\end{verbatim}
-
-This confirms ciphertext stealing correctly preserves length and handles partial blocks.
-
-\subsection{Performance Comparison (10KB files)}
-
-\begin{table}[h]
-\centering
-\caption{Encryption Time for 10KB File}
-\begin{tabular}{|l|c|c|}
-\hline
-\textbf{Configuration} & \textbf{Time (ms)} & \textbf{Speedup} \\
-\hline
-AES-128 Software & 8.2 & 1.0x \\
-AES-128 Hardware & 1.8 & 4.6x \\
-AES-192 Software & 9.5 & 1.0x \\
-AES-192 Hardware & 2.0 & 4.8x \\
-AES-256 Software & 10.8 & 1.0x \\
-AES-256 Hardware & 2.2 & 4.9x \\
-\hline
-\end{tabular}
-\end{table}
-
-\section{Statistical Analysis: Tweak Avalanche Effect}
-
-The \texttt{stat} application measures tweak avalanche properties by computing Hamming distances between successive ciphertexts with incremented tweaks.
-
-\subsection{Methodology}
-
-\textbf{Experimental Setup}:
-\begin{itemize}
-    \item Experiments: 10,000 independent trials
-    \item Tweaks per experiment: 256 (0 to 255)
-    \item Total measurements: 2,550,000 Hamming distances
-    \item Block size: 128 bits
-    \item Key size: AES-128 (16 bytes)
-\end{itemize}
-
-\textbf{Procedure}: For each experiment:
-\begin{enumerate}
-    \item Generate random plaintext block (16 bytes)
-    \item Generate random key (16 bytes)
-    \item Encrypt with tweak = 0, store ciphertext $C_0$
-    \item For tweak = 1 to 255:
-    \begin{itemize}
-        \item Encrypt same plaintext with new tweak $\rightarrow C_i$
-        \item Compute Hamming distance: $HD(C_i, C_{i-1})$
-        \item Record distance in histogram
-    \end{itemize}
-\end{enumerate}
-
-\subsection{Results}
+The stat.cpp application (invoked via \texttt{./bin/stat}) validates the cryptographic properties introduced by the tweak mechanism. By encrypting the same plaintext with incrementing tweak values over 10,000 experiments with 256 tweaks each (2.5M+ Hamming distance measurements), the application measures how tweak variations propagate through the ciphertext. This empirically validates the diffusion properties required of a tweakable cipher.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.50\textwidth]{stat_histogram.pdf}
-\caption{Hamming distance distribution. Red line: observed mean (64.00 bits); green line: theoretical (64.0 bits).}
+\includegraphics[width=0.45\textwidth]{stat_histogram.pdf}
+\caption{Hamming distance distribution from stat.cpp output over 2.5M measurements. Red line: observed mean (64.00 bits); green line: theoretical expectation (64.0 bits). Distribution center near 64 bits confirms that tweak-induced variations produce approximately 50\% diffusion.}
 \label{fig:stat_histogram}
 \end{figure}
 
-\textbf{Statistical Summary}:
-\begin{itemize}
-    \item \textbf{Mean}: 64.0 bits (exactly 50.0\% of 128 bits)
-    \item \textbf{Expected for random}: 64 bits
-    \item \textbf{Standard deviation}: ~5.7 bits
-    \item \textbf{Peak frequency}: 179,823 occurrences at 64 bits
-    \item \textbf{Range}: 34-91 bits (99.9\% within 34-91)
-\end{itemize}
-
-\subsection{Analysis}
-
-\subsubsection{Avalanche Property Validation}
-
-The results demonstrate \textbf{ideal avalanche behavior}:
-
-\textbf{Perfect Mean}: The observed mean of 64.0 bits matches the theoretical expectation for uniformly random bit flips. This indicates that incrementing the tweak by 1 causes approximately half the ciphertext bits to flip, achieving maximum diffusion.
-
-\textbf{Binomial Distribution}: The histogram follows a binomial distribution B(128, 0.5), characteristic of independent random bit flips:
-$$P(HD = k) = \binom{128}{k} \cdot 0.5^{128}$$
-
-\textbf{No Bias}: The symmetric distribution around 64 bits shows no systematic bias toward more or fewer bit changes.
-
-\subsubsection{Cryptographic Significance}
-
-These results confirm that the tweak modification:
-\begin{itemize}
-    \item Provides \textbf{strong non-linearity}: Small tweak changes → large ciphertext changes
-    \item Achieves \textbf{full diffusion}: Every ciphertext bit is influenced by the tweak
-    \item Exhibits \textbf{pseudo-randomness}: Output indistinguishable from random
-    \item Prevents \textbf{related-key attacks}: Adjacent tweaks produce uncorrelated ciphertexts
-\end{itemize}
-
-\subsubsection{Comparison to Standard AES}
-
-For comparison, standard AES exhibits identical avalanche properties when varying the key or plaintext. Our tweak implementation achieves the same cryptographic strength, confirming that arithmetic addition (mod $2^{128}$) at the designated round provides effective key-dependent transformation.
-
-\subsection{Conclusion}
-
-The statistical analysis provides strong evidence that the T-AES tweak mechanism maintains cryptographic integrity. The perfect 50\% bit-flip probability across 2.55 million measurements demonstrates that the tweak contributes meaningfully to the encryption process without introducing weaknesses or patterns.
-
 \section{Performance Benchmark Results}
 
-This section presents detailed performance measurements comparing T-AES implementations (software and AES-NI) against OpenSSL's XTS mode, examining throughput, latency, and the impact of key size and tweak usage.
+The speed.cpp application (invoked via \texttt{./bin/speed}) provides detailed performance measurements comparing T-AES implementations (software and AES-NI) against OpenSSL's XTS mode, examining throughput, latency, and the impact of key size and tweak usage. The benchmark critically excludes key expansion (setup) from timing measurements, focusing only on encryption and decryption operations. This design reflects real-world usage patterns: key expansion occurs once per key, while encryption and decryption occur for every block of data. By excluding setup time, the benchmark isolates the throughput-critical path and provides meaningful performance metrics for streaming scenarios. Each iteration generates a fresh random key and plaintext (lines 128, 180-181 in speed.cpp), simulating realistic conditions without counting the one-time setup cost.
 
 \subsection{Benchmark Configuration}
 
@@ -711,7 +554,6 @@ This section presents detailed performance measurements comparing T-AES implemen
     \item Timing method: \texttt{clock\_gettime(CLOCK\_MONOTONIC)} with nanosecond precision
     \item Key sizes tested: 128, 192, 256 bits
     \item Tweak modes: with-tweak and no-tweak
-    \item XTS comparison: OpenSSL 128-bit and 256-bit
     \item \textbf{Important}: Key setup excluded from measurements (only encrypt/decrypt operations timed)
 \end{itemize}
 
@@ -719,7 +561,7 @@ This section presents detailed performance measurements comparing T-AES implemen
 
 \begin{table*}[t]
 \centering
-\caption{Performance Comparison: T-AES vs OpenSSL XTS (4KB blocks, 100k iterations)}
+\caption{Performance Results (4KB blocks, 100k iterations)}
 \label{tab:performance}
 \small
 \begin{tabular}{|l|r|r|r|r|}
@@ -778,44 +620,6 @@ XTS-256 Decrypt & 0.53 & 0.57 & 25.48 & 6.716 \\
 \end{tabular}
 \end{table*}
 
-\subsection{Relative Performance Analysis}
-
-\textbf{Baseline}: T-AES Software Encrypt 128 no-tweak
-
-\begin{table}[h]
-\centering
-\caption{Speedup Relative to Software Baseline}
-\begin{tabular}{|l|r|}
-\hline
-\textbf{Configuration} & \textbf{Speedup} \\
-\hline
-T-AES AES-NI 128 (no-tweak) & 11.16x \\
-T-AES SW 128 (with tweak) & 0.97x \\
-OpenSSL XTS-128 & 219.89x \\
-OpenSSL XTS-256 & 165.95x \\
-\hline
-\end{tabular}
-\end{table}
-
-\subsection{Key Observations}
-
-\subsubsection{AES-NI Hardware Acceleration}
-
-\textbf{Speedup Factor}: 11-12x faster than software for encryption
-\begin{itemize}
-    \item AES-128 encryption: 11.16x speedup
-    \item AES-192 encryption: 11.85x speedup
-    \item AES-256 encryption: 11.32x speedup
-    \item Consistent across all key sizes
-\end{itemize}
-
-\textbf{Absolute Performance}:
-\begin{itemize}
-    \item Peak throughput: 0.461 GB/s (AES-NI 128-bit encryption)
-    \item Average latency: 8-13 $\mu$s per 4KB block
-    \item Decryption ~30-40\% slower than encryption (InvMixColumns overhead)
-\end{itemize}
-
 \subsubsection{Key Size Impact}
 
 \textbf{Software Implementation}:
@@ -841,76 +645,6 @@ Tweak addition causes minimal performance degradation:
     \item Single 128-bit arithmetic addition per block
     \item Overhead dominated by memory access pattern changes
 \end{itemize}
-
-\textbf{Note}: Hardware shows larger relative overhead because the base operation is so fast that the tweak calculation becomes proportionally more significant.
-
-\subsubsection{OpenSSL XTS Dominance}
-
-OpenSSL achieves dramatically higher throughput:
-\begin{itemize}
-    \item 220x faster than T-AES software
-    \item 20x faster than T-AES AES-NI
-    \item Throughput: 6.7-8.8 GB/s
-\end{itemize}
-
-\textbf{Reasons for OpenSSL's Performance}:
-\begin{enumerate}
-    \item \textbf{Aggressive optimization}: Years of performance tuning
-    \item \textbf{Parallel processing}: Interleaves multiple blocks using pipelining
-    \item \textbf{SIMD utilization}: Processes multiple AES operations simultaneously
-    \item \textbf{Specialized implementation}: Custom assembly for critical paths
-    \item \textbf{XTS mode efficiency}: Simpler than our ECB + CTS approach
-\end{enumerate}
-
-\subsection{Performance Justification}
-
-\subsubsection{Why Not 100x Speedup from AES-NI?}
-
-Despite AES-NI reducing instruction count by ~100x, we observe only 11x real-world speedup:
-
-\textbf{Limiting Factors}:
-\begin{itemize}
-    \item \textbf{Memory bandwidth}: Loading/storing 4KB blocks dominates at fast encryption speeds
-    \item \textbf{I/O overhead}: \texttt{cin.read()} and \texttt{cout.write()} are not optimized for streaming
-    \item \textbf{Non-accelerated operations}: Vector operations, conditionals, tweak arithmetic
-    \item \textbf{Amdahl's Law}: Non-parallelizable portions limit overall speedup
-\end{itemize}
-
-\textbf{Breakdown} (estimated):
-\begin{itemize}
-    \item Pure encryption: ~2 $\mu$s (AES-NI)
-    \item Memory operations: ~3 $\mu$s
-    \item Overhead (setup, checks): ~3 $\mu$s
-    \item Total: ~8 $\mu$s per 4KB block
-\end{itemize}
-
-\subsubsection{Comparison Context}
-
-Our T-AES implementation is competitive for an educational/reference implementation:
-\begin{itemize}
-    \item 0.46 GB/s compares favorably to many file encryption tools
-    \item Sufficient for real-time encryption of video streams (< 200 MB/s for 1080p)
-    \item Orders of magnitude faster than interpreted languages (Python/Java)
-\end{itemize}
-
-OpenSSL represents the state-of-the-art optimized implementation with:
-\begin{itemize}
-    \item Decades of performance optimization
-    \item Multi-block parallel processing
-    \item Hand-optimized assembly kernels
-    \item Advanced CPU feature utilization
-\end{itemize}
-
-\subsection{Conclusion}
-
-The benchmark results confirm:
-\begin{enumerate}
-    \item AES-NI provides substantial performance improvements (11x)
-    \item Hardware acceleration remains effective across all key sizes
-    \item Tweak overhead is negligible in practical terms (< 5\% for software)
-    \item OpenSSL's highly optimized implementation sets the performance ceiling
-    \item T-AES achieves respectable performance for a reference implementation
-\end{enumerate}
 
 \section{Performance Comparison and Justification}
 
@@ -974,304 +708,30 @@ The \texttt{speed.cpp} module measures encryption throughput using:
     \item Warm-up: Initial runs to fill caches
 \end{itemize}
 
+\section{Code Attribution and External Dependencies}
 
+The T-AES implementation utilizes the following external libraries and resources:
 
-\section{Test Results and Validation}
-
-This section presents comprehensive test results validating correctness, security properties, and edge case handling across all operational modes.
-
-\subsection{Test Suite Overview}
-
-The \texttt{test\_all\_combinations.sh} script executes 60+ tests covering:
 \begin{itemize}
-    \item 3 key sizes (128, 192, 256 bits)
-    \item 2 implementations (software, hardware)
-    \item 2 modes (with/without tweak)
-    \item 5 test categories (round-trip, wrong key, wrong tweak, consistency, irregular sizes)
+    \item \textbf{OpenSSL Cryptography Library} (referenced in \texttt{xts\_wrapper.cpp}, \texttt{encrypt.cpp}, \texttt{decrypt.cpp}, \texttt{speed.cpp}, and \texttt{stat.cpp}): Used for SHA-256 password hashing via \texttt{digest\_message()}, XTS mode implementation in benchmarks, and EVP cipher contexts for performance comparison.
+    \item \textbf{GCC Compiler Intrinsics} (\texttt{wmmintrin.h}): AES-NI instruction wrappers (\texttt{\_mm\_aesenc\_si128}, \texttt{\_mm\_aesdec\_si128}, etc.) used in \texttt{AESNI.hpp} for hardware acceleration.
+    \item \textbf{Standard C++ Library}: Used throughout for vectors, file I/O, and timing operations (\texttt{chrono}, \texttt{cstdlib}, \texttt{iostream}).
+    \item \textbf{POSIX APIs}: \texttt{clock\_gettime()} for nanosecond-precision timing in \texttt{speed.cpp} and \texttt{stat.cpp}.
 \end{itemize}
 
-\textbf{Total Test Matrix}: 3 × 2 × 2 × 5 = 60+ individual test cases
-
-\subsection{Correctness Validation Results}
-
-\subsubsection{Round-Trip Tests}
-
-\textbf{Objective}: Verify that encryption followed by decryption recovers original plaintext
-
-\textbf{Results}:
-\begin{verbatim}
-[PASS] AES-128 software without tweak
-[PASS] AES-128 software with tweak
-[PASS] AES-128 hardware without tweak
-[PASS] AES-128 hardware with tweak
-[PASS] AES-192 software without tweak
-[PASS] AES-192 software with tweak
-[PASS] AES-192 hardware without tweak
-[PASS] AES-192 hardware with tweak
-[PASS] AES-256 software without tweak
-[PASS] AES-256 software with tweak
-[PASS] AES-256 hardware without tweak
-[PASS] AES-256 hardware with tweak
-
-Tests passed: 12/12
-\end{verbatim}
-
-\textbf{Validation Method}:
-\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
-cat plaintext.bin | ./encrypt 128 "password" | \
-    ./decrypt 128 "password" > output.bin
-cmp -s plaintext.bin output.bin
-\end{lstlisting}
-
-\subsubsection{Cross-Implementation Consistency}
-
-\textbf{Objective}: Ensure software and hardware produce identical ciphertext
-
-\vspace{0.3cm}
-\textbf{Results}:
-
-\vspace{0.2cm}
-{\small
-\texttt{[PASS] AES-128 software vs hardware without tweak}\\
-\texttt{[PASS] AES-128 software vs hardware with tweak}\\
-\texttt{[PASS] AES-192 software vs hardware without tweak}\\
-\texttt{[PASS] AES-192 software vs hardware with tweak}\\
-\texttt{[PASS] AES-256 software vs hardware without tweak}\\
-\texttt{[PASS] AES-256 software vs hardware with tweak}\\
-\texttt{Tests passed: 6/6}
-}
-
-\textbf{Validation Method}:
-\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
-cat plaintext.bin | ./encrypt 128 "password" > cipher_sw.bin
-cat plaintext.bin | ./encrypt_aesni 128 "password" > cipher_hw.bin
-cmp -s cipher_sw.bin cipher_hw.bin
-\end{lstlisting}
-
-\textbf{Significance}: This confirms that:
-\begin{itemize}
-    \item AES-NI instructions correctly implement FIPS 197
-    \item No discrepancies in round transformations
-    \item Key expansion is identical
-    \item Endianness handling is correct
-\end{itemize}
-
-\subsection{Security Validation Results}
-
-\subsubsection{Wrong Key Tests}
-
-\textbf{Objective}: Verify that wrong decryption key produces incorrect output
-
-\vspace{0.3cm}
-\textbf{Results}:
-
-\vspace{0.2cm}
-{\small
-\texttt{[PASS] AES-128 software wrong key (correctly fails)}\\
-\texttt{[PASS] AES-128 software wrong key with tweak (correctly fails)}\\
-\texttt{[PASS] AES-128 hardware wrong key (correctly fails)}\\
-\texttt{[PASS] AES-128 hardware wrong key with tweak (correctly fails)}\\
-\texttt{... (similar for 192, 256)}\\
-\texttt{Tests passed: 12/12 (negative tests)}
-}
-
-\textbf{Test Logic}:
-\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
-cat plaintext.bin | ./encrypt 128 "correct_pwd" | \
-    ./decrypt 128 "wrong_pwd" > output.bin
-if ! cmp -s plaintext.bin output.bin; then
-    echo "PASS (correctly fails)"
-fi
-\end{lstlisting}
-
-\textbf{Analysis}: Confirms that:
-\begin{itemize}
-    \item Encryption actually depends on key material
-    \item Not storing plaintext in hidden form
-    \item Wrong key produces seemingly random output
-    \item Key derivation from password is unique
-\end{itemize}
-
-\subsubsection{Wrong Tweak Tests}
-
-\textbf{Objective}: Verify tweak parameter affects encryption output
-
-\vspace{0.3cm}
-\textbf{Results}:
-
-\vspace{0.2cm}
-{\small
-\texttt{[PASS] AES-128 software wrong tweak (correctly fails)}\\
-\texttt{[PASS] AES-192 software wrong tweak (correctly fails)}\\
-\texttt{[PASS] AES-256 software wrong tweak (correctly fails)}\\
-\texttt{[PASS] AES-128 hardware wrong tweak (correctly fails)}\\
-\texttt{[PASS] AES-192 hardware wrong tweak (correctly fails)}\\
-\texttt{[PASS] AES-256 hardware wrong tweak (correctly fails)}\\
-\texttt{Tests passed: 6/6 (negative tests)}
-}
-
-\textbf{Significance}:
-\begin{itemize}
-    \item Tweak is properly integrated into encryption process
-    \item Tweak increment actually modifies state
-    \item Counter mode enhancement works correctly
-    \item Cannot decrypt with mismatched tweak
-\end{itemize}
-
-\subsection{Ciphertext Stealing Validation}
-
-\subsubsection{Irregular Size Tests}
-
-\textbf{Objective}: Test CTS with non-block-aligned data (23 bytes = 1 full block + 7 bytes)
-
-\textbf{Test Data}: "Irregular size test!!" (23 bytes)
-
-\vspace{0.3cm}
-\textbf{Results}:
-
-\vspace{0.2cm}
-{\small
-\texttt{[PASS] AES-128 software irregular size}\\
-\texttt{[PASS] AES-128 software irregular size with tweak}\\
-\texttt{[PASS] AES-128 hardware irregular size}\\
-\texttt{[PASS] AES-128 hardware irregular size with tweak}\\
-\texttt{... (similar for 192, 256)}\\
-\texttt{Tests passed: 12/12}
-}
-
-\textbf{Length Verification}:
-\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
-INPUT_SIZE=$(wc -c < irregular.txt)
-cat irregular.txt | ./encrypt 128 "pwd" > cipher.bin
-CIPHER_SIZE=$(wc -c < cipher.bin)
-[ $INPUT_SIZE -eq $CIPHER_SIZE ] && echo "Length preserved"
-\end{lstlisting}
-
-\textbf{CTS Correctness}:
-\begin{itemize}
-    \item Output length = input length (no padding)
-    \item Round-trip successful (data recovered exactly)
-    \item Works with all key sizes
-    \item Works with and without tweak
-    \item Identical behavior in software and hardware
-\end{itemize}
+All original AES core implementation, tweak integration, ciphertext stealing logic, and counter-mode operations are authored as part of this project. Intermediate testing functions (\texttt{verify\_aes.cpp}, etc.) developed during implementation are no longer required as the \texttt{test\_comprehensive.sh} script and manual CLI tests provide comprehensive validation.
 
 \section{Conclusion}
 
-This project successfully demonstrates a complete implementation of the Advanced Encryption Standard (AES) in both pure software and hardware-accelerated forms. The implementation addresses the core requirements of providing secure, efficient encryption while handling practical challenges such as non-block-aligned data through ciphertext stealing.
+The T-AES project successfully achieved its main objective of implementing the Advanced Encryption Standard (AES) in both software and hardware-accelerated versions. By developing two functionally equivalent implementations, this work provided a clear comparison between traditional software-based encryption and modern hardware-assisted approaches using Intel’s AES-NI instruction set.
 
-\subsection{Key Achievements}
+Throughout the project, particular attention was given to compliance with the AES standard and to ensuring full interoperability between both implementations. The introduction of ciphertext stealing allowed the system to correctly handle data that is not a multiple of the AES block size, preserving ciphertext length without the need for padding. This feature, combined with optional tweak support, makes the solution flexible and aligned with the requested encryption and decryption requirements.
 
-\textbf{Functional Completeness}:
-\begin{itemize}
-    \item Full AES implementation supporting 128, 192, and 256-bit keys
-    \item Correct implementation of all four AES transformations (SubBytes, ShiftRows, MixColumns, AddRoundKey)
-    \item Proper key expansion for all key sizes
-    \item ECB mode with optional tweak-based counter enhancement
-    \item Ciphertext stealing for seamless handling of irregular input sizes
-\end{itemize}
+Testing covered all relevant cases, including different key sizes, the presence or absence of tweaks, and cross-validation between implementations. Results showed that both the software and hardware versions produced identical outputs for all tested configurations, confirming the correctness of the design and the consistency between the implementations. Performance benchmarks highlighted a significant speedup—around 3 to 5 times—when using AES-NI instructions, while maintaining consistent security and output integrity. The impact of the tweak mode was minimal, introducing only a small overhead, which further demonstrates the efficiency of the implementation.
 
-\textbf{Performance Excellence}:
-\begin{itemize}
-    \item Hardware acceleration achieves 4-5x speedup over software
-    \item Throughput exceeds 1 GB/s on modern processors with AES-NI
-    \item Efficient memory usage through streaming I/O
-    \item Predictable constant-time execution in hardware version
-\end{itemize}
+From a broader perspective, this project illustrates how hardware acceleration can provide substantial benefits in both performance and resistance to side-channel attacks, thanks to constant-time execution and reduced reliance on memory lookups. Meanwhile, the software implementation remains valuable for understanding the inner workings of AES.
 
-\textbf{Cryptographic Correctness}:
-\begin{itemize}
-    \item 100\% test pass rate across all 54 test cases
-    \item Perfect agreement between software and hardware implementations
-    \item Successful validation of security properties (key/tweak dependency)
-    \item Correct handling of edge cases (empty files, single bytes, large files)
-\end{itemize}
-
-\textbf{Software Engineering Quality}:
-\begin{itemize}
-    \item Modular architecture with clear separation of concerns
-    \item Comprehensive automated test suite
-    \item Unix-philosophy design enabling tool composition
-    \item Well-documented code with educational value
-\end{itemize}
-
-\subsection{Technical Insights}
-
-The project provides valuable insights into the relationship between algorithm design and hardware implementation:
-
-\textbf{Algorithm-Hardware Co-design}: AES was designed with hardware implementation in mind. The regular structure of the transformations, fixed block and key sizes, and mathematical properties of the operations make it amenable to efficient hardware circuits. This foresight has enabled the dramatic performance improvements seen with AES-NI.
-
-\textbf{Security-Performance Tradeoff}: The software implementation demonstrates the classic tradeoff between performance and security. Table lookups provide speed but introduce cache-timing vulnerabilities. The hardware version eliminates this tradeoff by achieving both high performance and resistance to side-channel attacks.
-
-\textbf{Abstraction Costs}: Despite a 100:1 advantage in instruction count, hardware acceleration provides only 4-5x real-world speedup. This illustrates that even highly optimized operations face practical limits from memory bandwidth, I/O overhead, and non-accelerated supporting operations.
-
-\subsection{Educational Value}
-
-The dual implementation serves important pedagogical purposes:
-
-\begin{itemize}
-    \item \textbf{Algorithm Understanding}: The software version clearly demonstrates each AES transformation, making the algorithm accessible for learning
-    \item \textbf{Performance Analysis}: Direct comparison quantifies the impact of hardware acceleration
-    \item \textbf{Security Awareness}: Contrast between implementations highlights side-channel attack considerations
-    \item \textbf{Practical Engineering}: The project demonstrates real-world concerns like irregular input handling, cross-platform compatibility, and comprehensive testing
-\end{itemize}
-
-\subsection{Practical Applications}
-
-The T-AES implementation is suitable for various real-world scenarios:
-
-\begin{itemize}
-    \item File encryption for cloud storage or backups
-    \item Encryption pipelines in shell scripts
-    \item Educational demonstrations of AES and hardware acceleration
-    \item Performance benchmarking of different processors
-    \item Foundation for more complex encryption systems (with addition of authentication)
-\end{itemize}
-
-\subsection{Limitations and Future Work}
-
-While functionally complete, several areas could be enhanced:
-
-\textbf{Security Enhancements}:
-\begin{itemize}
-    \item Add authenticated encryption (GCM mode) to prevent tampering
-    \item Implement proper key derivation (PBKDF2/Argon2) instead of simple SHA-256
-    \item Add integrity checks to detect corruption or malicious modification
-\end{itemize}
-
-\textbf{Operational Modes}:
-\begin{itemize}
-    \item Support for additional modes: CTR, CFB, OFB for different use cases
-    \item Proper IV/nonce management for secure multi-message encryption
-    \item Streaming cipher modes for byte-by-byte processing
-\end{itemize}
-
-\textbf{Performance Optimizations}:
-\begin{itemize}
-    \item Parallel block processing using OpenMP or threads
-    \item SIMD optimizations for software version (AES without AES-NI)
-    \item ARM NEON support for mobile and embedded platforms
-\end{itemize}
-
-\textbf{Usability Improvements}:
-\begin{itemize}
-    \item Automatic CPU feature detection and implementation selection
-    \item Progress indicators for large files
-    \item Configuration file support for repeated operations
-    \item Integration with key management systems
-\end{itemize}
-
-\subsection{Final Remarks}
-
-This project demonstrates that modern cryptographic implementations benefit immensely from hardware support. The AES-NI instructions represent a successful case of algorithm-hardware co-design, where careful algorithm selection during the AES competition and subsequent hardware integration have produced a solution that is both secure and performant.
-
-The T-AES implementation serves as both a practical tool and an educational resource. It shows that achieving high performance doesn't require sacrificing code clarity or correctness. The comprehensive test suite and dual implementation approach provide confidence in the correctness while enabling performance comparisons that would be difficult with a single implementation.
-
-As cryptographic workloads continue to grow in importance for data security, privacy, and regulatory compliance, efficient implementations like this will become increasingly critical. The principles demonstrated here—leveraging hardware acceleration, maintaining cryptographic correctness, and handling real-world edge cases—apply broadly to cryptographic engineering.
-
-\section*{Acknowledgments}
-
-This implementation follows NIST FIPS 197 specifications and incorporates best practices from cryptographic engineering literature. The project structure was inspired by various open-source AES implementations and academic resources on hardware acceleration.
+In conclusion, T-AES represents a complete and robust implementation that meets the technical goals of the assignment while offering practical insights into how algorithmic design and computer architecture interact in modern cryptographic systems. Future work could extend this project with additional modes of operation like CBC, CTR or OFB ; authenticated encryption; or performance optimizations targeting parallel and multi-core environments.
 
 \begin{thebibliography}{00}
 \bibitem{fips197} NIST, ``Advanced Encryption Standard (AES),'' FIPS PUB 197, 2001.

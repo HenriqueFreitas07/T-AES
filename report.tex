@@ -33,52 +33,44 @@ November 2025}}
 
 \maketitle
 
-% for the whole project, not abstract when we refer something or a program we should refer the name of the script for example if were talking about our aes we say we have the structure in aes.hpp and call it in encrypt, we just need to refer each one once, for example also speaking about the speed we should say what it does and the script speed.cpp and how to call it ./bin/speed and also the make file we have
-% all the -- that are used instead of commas shoould be removed for example AES-NI is correct but having equivalent-given in the place of a coma is wrong
-% we have 6 pages at the moment, maybe we can put snipets of the code in some places when explaining the code, and also explain a bit more the theory behind it
 
-% include that we are implementing AES in cpp with a tweak and explain briefly the tweak in abstract, arythmetic adition
-% refer that we also provide togehter with that the two functinos speed and stat where we prove the things given to us in the pdf explaining the work
-% explain that we also compare with xts but ofc in an abstract way
 \begin{abstract}
-This report presents T-AES, a tweakable Advanced Encryption Standard implementation featuring both software and hardware-accelerated (AES-NI) versions. The tweak, a 128-bit value combined via arithmetic addition (mod $2^{128}$) with the middle round key, enables deterministic variation across encrypted blocks without requiring secrecy, similar in concept to XTS mode. The implementation supports AES-128, AES-192, and AES-256 in an ECB-based counter mode where the tweak increments per block. Ciphertext stealing handles non-block-aligned data without padding. The project includes encrypt and decrypt command-line applications, a speed benchmark application (speed.cpp) comparing T-AES software, T-AES AES-NI, and OpenSSL XTS implementations, and a statistical analysis application (stat.cpp) that measures Hamming distance distributions to validate the cryptographic properties of the tweak. Both T-AES implementations are validated to produce identical outputs, demonstrating cryptographic equivalence.
+This report presents T-AES, a tweakable Advanced Encryption Standard implementation featuring both software and hardware-accelerated (AES-NI) versions. The tweak, a 128-bit value combined via arithmetic addition (mod $2^{128}$) with the middle round key, enables deterministic variation across encrypted blocks without requiring secrecy. The implementation supports AES-128, AES-192, and AES-256 in an ECB-based counter mode where the tweak increments per block. Ciphertext stealing handles non-block-aligned data without padding. The project includes encrypt and decrypt command-line applications, a speed benchmark application (speed.cpp) comparing T-AES software, T-AES AES-NI, and OpenSSL XTS implementations, and a statistical analysis application (stat.cpp) that measures Hamming distance distributions to validate the cryptographic properties of the tweak. Both T-AES implementations are validated to produce identical outputs, demonstrating cryptographic equivalence.
 \end{abstract}
 
 \begin{IEEEkeywords}
 AES, encryption, hardware acceleration, AES-NI, ciphertext stealing, ECB mode, performance comparison
 \end{IEEEkeywords}
 
-% replace the facto for something else
-% refer xts and cts and the tweak and xtx 128 and 256
+
 \section{Introduction}
 
 The Advanced Encryption Standard (AES) has been the widely adopted symmetric encryption algorithm since its standardization by NIST in 2001. Tweakable block ciphers extend the standard AES model by introducing a tweak parameter, a non-secret value that modifies the encryption without requiring a key change. A prominent example is XTS (XEX-based Tweaked-codebook mode with ciphertext Stealing), used in full-disk encryption, which applies the tweak at the input and output of AES-128 and includes ciphertext stealing to handle non-block-aligned data.
 
-This project implements T-AES, a variant where the tweak is inserted in the middle of the AES substitution-permutation network (at the middle round key) rather than at input/output. Combined with an ECB-mode counter that increments the tweak per block and ciphertext stealing for final blocks, T-AES provides a complete tweakable encryption scheme. The implementation follows NIST FIPS 197 specifications and includes support for all three standard key sizes (128, 192, and 256 bits).
+This project implements T-AES, a variant where a tweak is inserted in the middle of the AES substitution-permutation network (at the middle round key) rather than at input/output. Combined with an ECB-mode counter that increments the tweak per block and ciphertext stealing for final blocks, T-AES provides a complete tweakable encryption scheme. The implementation follows NIST FIPS 197 specifications and includes support for all three standard key sizes (128, 192, and 256 bits).
 
 Modern processors have evolved to include specialized instructions for AES operations. Intel's AES New Instructions (AES-NI), introduced in 2010, provide hardware-level acceleration for AES encryption and decryption. These instructions offer substantial performance improvements while maintaining resistance to timing-based side-channel attacks that can affect software implementations. This project implements both software and hardware-accelerated versions to compare performance approaches and validate cryptographic equivalence across architectures. A notable feature is the ciphertext stealing technique, which eliminates the need for padding when processing data that doesn't align to 16-byte block boundaries.
 
-% and also achieving cross encryptino and decryption with of course the same key and tweak if done with tht tweak
 \section{Baseline Requirements and Specifications}
 
-The T-AES project was designed with clear functional and implementation requirements to ensure modularity, performance, and strict adherence to the AES standard. The goal was to create a command-line tool capable of encrypting and decrypting data streams using both software and hardware-accelerated versions of AES, while maintaining identical cryptographic behavior in both implementations.
+The T-AES project was designed with clear functional and implementation requirements. The goal was to create a command-line tool capable of encrypting and decrypting data streams using both software and hardware-accelerated versions of AES, while maintaining identical cryptographic behavior in both implementations.
 
 
-% if not exmplained further explain a bit better what each thing is, careful not to go over 8 pages, the lokoup tables, what are the bitwise operations, but i think they are written after
+
 \subsection{Functional Requirements}
 
 The system operates entirely through command-line interaction, using Unix-style pipelines to maximize flexibility and interoperability. Instead of relying on file-based input and output, all data is processed as binary streams through \texttt{stdin} and \texttt{stdout}. This approach allows the encryption and decryption of data of arbitrary size without the need to load entire files into memory, making the system suitable for stream-based processing and integration with other command-line utilities.
 
 The encryption algorithm supports the three key sizes defined in the AES standard: 128, 192, and 256 bits. The block size is fixed at 128 bits (16 bytes), following the FIPS 197 specification. The tweak is combined with the round key via arithmetic addition (mod $2^{128}$) at the middle round (RK5 for AES-128, RK6 for AES-192, RK7 for AES-256). A practical advantage of using arithmetic addition is that during decryption, the same tweak value is added to the round key without requiring subtraction. By default, T-AES operates in Electronic Codebook (ECB) mode, where each block is processed independently. An optional tweak parameter can be provided to enable counter-mode operation where the tweak increments per block, enabling deterministic variation between otherwise identical plaintext blocks. The applications detect this through argument count, as shown in Listing~\ref{lst:arg_parsing}:
 
-\vspace{0.3cm}
+\vspace{0.8cm}
 \begin{lstlisting}[language=C++, caption=Tweak Detection via Argument Count (encrypt.cpp), label=lst:arg_parsing, basicstyle=\scriptsize\ttfamily, breaklines=true]
 if (argc < 3) {
     cout << "Args: <aes_size> <password> [tweak_password]" << endl;
     return 1;
 }
 if (argc == 4) {
-    TWEAK = true;  // Counter mode enabled
+    TWEAK = true;  
 }
 \end{lstlisting}
 \vspace{0.05cm}
@@ -207,7 +199,7 @@ MixColumns provides diffusion by mixing bytes within each column using Galois Fi
 
 \textbf{Mathematical Foundation}:
 
-Each column is treated as a polynomial and multiplied by the fixed polynomial $c(x) \{03\}x^3 + \{01\}x^2 + \{01\}x + \{02\}$ in GF($2^8$).
+Each column is treated as a polynomial and multiplied by the fixed polynomial $c(x)= \{03\}x^3 + \{01\}x^2 + \{01\}x + \{02\}$ in GF($2^8$).
 
 For column $[a_0, a_1, a_2, a_3]^T$, the output is:
 
@@ -479,23 +471,15 @@ _mm_storeu_si128((__m128i*)ciphertext, encrypted);
 
 \subsection{Hardware Advantages}
 
-\subsubsection{Performance Benefits}
+The hardware-accelerated implementation of AES offers significant benefits in both performance and security when compared to the traditional software version. These advantages stem primarily from how the AES-NI instructions are designed and executed directly at the processor level.
 
-\begin{itemize}
-    \item \textbf{Instruction Fusion}: Four transformations in one hardware operation
-    \item \textbf{Parallelism}: Dedicated circuits perform transformations simultaneously
-    \item \textbf{Pipelining}: Multiple blocks can be in flight concurrently
-    \item \textbf{No Memory Access}: All operations in registers, no cache thrashing
-\end{itemize}
+From a performance perspective, AES-NI achieves remarkable efficiency by combining multiple AES transformations—SubBytes, ShiftRows, MixColumns, and AddRoundKey—into a single hardware operation. This instruction fusion dramatically reduces the number of individual instructions required per encryption round, leading to much faster execution. Additionally, the dedicated hardware circuits responsible for AES operations can perform several transformations in parallel, effectively exploiting the processor’s SIMD (Single Instruction, Multiple Data) capabilities.
 
-\subsubsection{Security Advantages}
+Another key advantage lies in the hardware’s ability to pipeline operations. This means that multiple blocks of data can be processed concurrently, with different stages of the AES algorithm executing in parallel. As a result, throughput increases substantially, particularly when encrypting large amounts of data. This happends due to the fact that the entire AES state is handled within processor registers, skipping memory access , reducing cache thrashing and improving overall consistency in performance.
 
-\begin{itemize}
-    \item \textbf{Constant-Time Execution}: No data-dependent branches or memory accesses
-    \item \textbf{Cache-Timing Resistance}: No lookup table accesses that leak through cache
-    \item \textbf{Simplicity}: Less code means smaller attack surface
-    \item \textbf{Side-Channel Protection}: Hardware circuits don't exhibit timing variations based on data
-\end{itemize}
+In terms of security, AES-NI provides strong resistance to side-channel and timing-based attacks. Unlike software implementations, it avoids data-dependent branches and table lookups, which are often vulnerable to cache-timing leaks. The hardware executes all AES transformations in constant time, regardless of the input data or key values, ensuring that no information about the internal state can be inferred from timing variations. This property is particularly important in cryptographic contexts where confidentiality and consistency are critical.
+
+ Since AES-NI operations are implemented as fixed processor instructions, the attack surface is smaller compared to a software routine composed of multiple memory operations and conditional branches. This combination of speed, predictability, and security makes AES-NI a highly effective choice for modern encryption systems where both performance and protection against side-channel threats are essential.
 
 \section{Comprehensive Testing and Validation}
 
@@ -503,7 +487,7 @@ _mm_storeu_si128((__m128i*)ciphertext, encrypted);
 
 The test suite (\texttt{test\_comprehensive.sh}) systematically validates T-AES implementations across all operational modes and configurations. The script executes 150+ tests covering three AES key sizes (128, 192, 256 bits), six plaintext sizes (16, 32, 64, 128, 256, 1024 bytes), both software and AES-NI implementations, and both tweaked and non-tweaked modes.
 
-Testing is organized into six stages with corresponding test groups. The core validation logic (shown in Listing~\ref{lst:test_core}) encrypts plaintext, decrypts the ciphertext, and verifies byte-for-byte equivalence:
+Testing is organized into six stages with the corresponding test groups. The core validation logic (shown in Listing~\ref{lst:test_core}) encrypts the plaintext, decrypts the ciphertext, and verifies byte-for-byte equivalence:
 
 \vspace{0.05cm}
 \begin{lstlisting}[language=bash, caption=Core Test Loop Structure, label=lst:test_core, basicstyle=\scriptsize\ttfamily, breaklines=true]
@@ -524,7 +508,7 @@ Stages progress through: (1) same-implementation correctness without tweaks (36 
 
 \subsection{Statistical Validation of Tweak Properties}
 
-The stat.cpp application (invoked via \texttt{./bin/stat}) validates the cryptographic properties introduced by the tweak mechanism. By encrypting the same plaintext with incrementing tweak values over 10,000 experiments with 256 tweaks each (2.5M+ Hamming distance measurements), the application measures how tweak variations propagate through the ciphertext. This empirically validates the diffusion properties required of a tweakable cipher.
+The stat.cpp application (invoked via \texttt{./bin/stat}) validates the cryptographic properties introduced by the tweak mechanism. By encrypting the same plaintext with incrementing tweak values over 10,000 experiments with 256 tweaks each (2.5M+ Hamming distance measurements), the application measures how tweak variations propagate through the ciphertext. This empirically validates the diffusion properties required for a cipher that can be tweaked.
 
 \begin{figure}[htbp]
 \centering
@@ -558,6 +542,7 @@ The speed.cpp application (invoked via \texttt{./bin/speed}) provides detailed p
 \end{itemize}
 
 \subsection{Benchmark Results}
+The results are displayed in Table 1 "Performance Results", on the following page.
 
 \begin{table*}[t]
 \centering
@@ -620,84 +605,13 @@ XTS-256 Decrypt & 0.53 & 0.57 & 25.48 & 6.716 \\
 \end{tabular}
 \end{table*}
 
-\subsubsection{Key Size Impact}
 
-\textbf{Software Implementation}:
-\begin{itemize}
-    \item AES-128 → AES-192: 16\% slower (10 → 12 rounds)
-    \item AES-192 → AES-256: 13\% slower (12 → 14 rounds)
-    \item Total 128 → 256: 31\% slower
-\end{itemize}
-
-\textbf{Hardware Implementation}:
-\begin{itemize}
-    \item Minimal impact: All key sizes within 1-3\% of each other
-    \item AES-NI instructions have fixed latency regardless of key size
-    \item Round count difference absorbed by hardware pipelining
-\end{itemize}
-
-\subsubsection{Tweak Overhead}
-
-Tweak addition causes minimal performance degradation:
-\begin{itemize}
-    \item Software: 3-4\% slower with tweak
-    \item Hardware: 18-23\% slower with tweak
-    \item Single 128-bit arithmetic addition per block
-    \item Overhead dominated by memory access pattern changes
-\end{itemize}
 
 \section{Performance Comparison and Justification}
 
 This section presents a comprehensive analysis comparing software and hardware AES implementations, examining theoretical expectations, empirical measurements, and architectural reasons for performance differences.
 
-\subsection{Theoretical Performance Analysis}
-
-\subsubsection{Instruction Count Comparison}
-
-\paragraph{\textbf{Software Implementation (per block)}}:
-\begin{itemize}
-    \item SubBytes: 16 table lookups + 16 stores = ~32 instructions
-    \item ShiftRows: ~20 instructions (byte permutation)
-    \item MixColumns: ~64 instructions (GF multiplications and XORs)
-    \item AddRoundKey: 16 XOR instructions
-    \item \textbf{Per round}: ~132 instructions
-    \item \textbf{AES-128 total}: 10 rounds $\times$ 132 + overhead $\approx$ 1400 instructions
-\end{itemize}
-
-\paragraph{\textbf{Hardware Implementation (per block)}}:
-\begin{itemize}
-    \item Initial AddRoundKey: 1 \_mm\_xor\_si128
-    \item 9 middle rounds: 9 × \_mm\_aesenc\_si128
-    \item Final round: 1 × \_mm\_aesenclast\_si128
-    \item Load/store: 3 SIMD load/store operations
-    \item \textbf{AES-128 total}: ~14 instructions
-\end{itemize}
-
-\subsubsection{Cycle Count Analysis}
-
-\textbf{Modern Processor }:
-
-Software version:
-\begin{itemize}
-    \item ~1400 instructions per block
-    \item Average CPI (cycles per instruction): ~1.5 with cache hits
-    \item Memory stalls: Add ~500 cycles for cache misses
-    \item \textbf{Total}: ~2600 cycles per 16-byte block
-    \item \textbf{Cycles/byte}: ~162.5
-\end{itemize}
-
-Hardware version:
-\begin{itemize}
-    \item AESENC latency: 4 cycles
-    \item AESENC throughput: 1 per cycle (pipelined)
-    \item With pipelining: 10 rounds / 1 per cycle = 10 cycles
-    \item Load/store overhead: ~10 cycles
-    \item \textbf{Total}: ~20 cycles per block (with pipeline full)
-    \item \textbf{Cycles/byte}: ~1.25
-\end{itemize}
-
-
-\subsubsection{Benchmark Methodology}
+\subsection{Benchmark Methodology}
 
 The \texttt{speed.cpp} module measures encryption throughput using:
 \begin{itemize}
@@ -707,6 +621,18 @@ The \texttt{speed.cpp} module measures encryption throughput using:
     \item Repetitions: Multiple runs averaged for stability
     \item Warm-up: Initial runs to fill caches
 \end{itemize}
+
+\subsection{Key Size Impact and Tweak Overhead}
+
+The influence of key size on performance was clearly observed in the software implementation. As expected, increasing the key length led to slower execution due to the higher number of rounds required. AES-192 was around 16\% slower than AES-128, and AES-256 added another 13\%, resulting in an overall slowdown of about 31\% from AES-128 to AES-256. This performance drop is directly related to the additional round computations and key expansion steps.
+
+In contrast, the hardware-accelerated version using AES-NI showed minimal variation across key sizes, with differences remaining within 1–3\%. The fixed latency of AES-NI instructions and the efficiency of hardware pipelining effectively absorbed the extra rounds, maintaining nearly constant performance for all key lengths.
+
+The inclusion of the optional tweak parameter caused only a small overhead. The software version was 3–4\% slower when using a tweak, while the hardware implementation experienced an 18–23\% slowdown, mainly due to memory access overhead. Despite this, the impact was minor in both cases, confirming that the tweak mechanism provides additional flexibility with negligible effect on overall efficiency.
+
+
+
+
 
 \section{Code Attribution and External Dependencies}
 
@@ -718,8 +644,6 @@ The T-AES implementation utilizes the following external libraries and resources
     \item \textbf{Standard C++ Library}: Used throughout for vectors, file I/O, and timing operations (\texttt{chrono}, \texttt{cstdlib}, \texttt{iostream}).
     \item \textbf{POSIX APIs}: \texttt{clock\_gettime()} for nanosecond-precision timing in \texttt{speed.cpp} and \texttt{stat.cpp}.
 \end{itemize}
-
-All original AES core implementation, tweak integration, ciphertext stealing logic, and counter-mode operations are authored as part of this project. Intermediate testing functions (\texttt{verify\_aes.cpp}, etc.) developed during implementation are no longer required as the \texttt{test\_comprehensive.sh} script and manual CLI tests provide comprehensive validation.
 
 \section{Conclusion}
 
@@ -753,6 +677,11 @@ In conclusion, T-AES represents a complete and robust implementation that meets 
 \bibitem{daemen} J. Daemen and V. Rijmen, ``The Design of Rijndael,'' Springer-Verlag, 2002.
 
 \bibitem{nistmodes} NIST, ``Block Cipher Modes of Operation,'' SP 800-38A, 2001.
+
+\bibitem{cts_wiki} Wikipedia, ``Ciphertext Stealing,'' \url{https://en.wikipedia.org/wiki/Ciphertext_stealing}, 2025.
+
+\bibitem{mixcolumns_wiki} Wikipedia, ``Rijndael MixColumns,'' \url{https://en.wikipedia.org/wiki/Rijndael_MixColumns}, 2025.
+
 \end{thebibliography}
 
 \end{document}

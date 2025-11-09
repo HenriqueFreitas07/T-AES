@@ -96,46 +96,6 @@ Both software and hardware versions use identical command syntax:
 
 ---
 
-## How It Works
-
-### Tweak Mechanism
-
-The tweak is a 128-bit value that modifies encryption without requiring a key change:
-
-1. **Injection Point**: Tweak is added (mod 2^128) to the middle round key
-   - AES-128: Round 5
-   - AES-192: Round 6
-   - AES-256: Round 7
-
-2. **Counter Mode**: When `[tweak_password]` is provided:
-   - Initial tweak derived from password via SHA-256
-   - Tweak increments (big-endian) after each block
-   - Ensures unique encryption per block
-
-3. **Decryption**: Same tweak value is added (addition is symmetric in mod 2^128)
-
-### Ciphertext Stealing (CTS)
-
-Handles data not aligned to 16-byte blocks without padding:
-
-**Encryption** (partial block Pn of M < 16 bytes):
-1. Encrypt all full blocks normally: `P0 → C0, P1 → C1, ..., P(n-1) → C(n-1)`
-2. Steal last `(16-M)` bytes from `C(n-1)`
-3. Concatenate `Pn` with stolen bytes and encrypt: `(Pn || tail(C(n-1))) → Cn`
-4. Truncate `C(n-1)` to first M bytes
-
-**Output**: `C0, C1, ..., truncated_C(n-1), Cn` (same length as plaintext)
-
-**Decryption**:
-1. Detect partial final block
-2. Reconstruct full `Cn` from merged data
-3. Decrypt `Cn` to extract `Pn` and stolen bytes
-4. Reconstruct and decrypt `C(n-1)`
-
-**Result**: Perfect plaintext recovery without padding overhead
-
----
-
 ## Performance Benchmarks
 
 Run comprehensive speed tests:
@@ -233,48 +193,6 @@ T-AES/
 
 ---
 
-## Technical Details
-
-### Implementation Highlights
-
-**Software Version** (`AES.hpp`):
-- Pure C++ implementation using lookup tables
-- S-box substitution, ShiftRows, MixColumns, AddRoundKey
-- Galois Field (GF(2^8)) arithmetic for MixColumns
-- Key expansion via NIST FIPS 197 algorithm
-
-**Hardware Version** (`AESNI.hpp`):
-- Intel AES-NI intrinsics (`wmmintrin.h`)
-- Single-instruction round operations (`_mm_aesenc_si128`)
-- Constant-time execution (resistant to timing attacks)
-- XMM register operations (128-bit SIMD)
-
-**Key Derivation**:
-- User password → SHA-256 hash → extract first 16/24/32 bytes
-- Deterministic and reproducible across executions
-
----
-
-## Security Considerations
-
-- **No ECB weaknesses**: Counter-mode tweak ensures block uniqueness
-- **Timing resistance**: AES-NI version provides constant-time execution
-- **No padding oracle**: Ciphertext stealing eliminates padding
-- **Standard compliance**: Follows NIST FIPS 197 AES specification
-
-**Note**: This is an educational/research implementation. For production use, consider established libraries like OpenSSL or libsodium.
-
----
-
-## References
-
-- NIST FIPS 197 - Advanced Encryption Standard (AES)
-- NIST SP 800-38A - Block Cipher Modes (Ciphertext Stealing)
-- Intel AES-NI White Paper (2010)
-- Daemen & Rijmen - "The Design of Rijndael" (2002)
-
----
-
 ## License
 
 MIT License - See `LICENSE` file for details.
@@ -284,9 +202,8 @@ MIT License - See `LICENSE` file for details.
 ## Authors
 
 **Contributors:**
-- **Henrique Freitas** (114990)
-- **Gabriel** (113682)
+- **Henrique Freitas** nº 114990
+- **Gabriel Santos** nº 113682
 
 Applied Cryptography Project
-Computer Architecture
 University of Aveiro, November 2025

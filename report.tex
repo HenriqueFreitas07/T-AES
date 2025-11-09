@@ -75,7 +75,7 @@ if (argc == 4) {
 \end{lstlisting}
 \vspace{0.05cm}
 
-Handling plaintext that is not a multiple of 16 bytes is achieved using ciphertext stealing (CTS). Unlike padding schemes such as PKCS\#7, CTS preserves the exact length of the plaintext in the resulting ciphertext. When the final block is incomplete, the algorithm borrows bytes from the previous ciphertext block to construct a complete final block. The core encryption logic in encrypt.cpp implements this as follows:
+Handling plaintext that is not a multiple of 16 bytes (but made of 2 blocks, having as a requirement the guarantee that we weren't treating example cases with less than 2 blocks, although for good practices checks were still included) is achieved using ciphertext stealing (CTS). Unlike padding schemes such as PKCS\#7, CTS preserves the exact length of the plaintext in the resulting ciphertext. When the final block is incomplete, the algorithm borrows bytes from the previous ciphertext block to construct a complete final block. The core encryption logic in encrypt.cpp implements this as follows:
 
 \vspace{0.05cm}
 \begin{lstlisting}[language=C++, caption=Ciphertext Stealing Encryption (encrypt.cpp), label=lst:cts_enc, basicstyle=\scriptsize\ttfamily, breaklines=true]
@@ -111,7 +111,7 @@ Key derivation in T-AES is performed through a simple yet secure process. The us
 
 The encrypt and decrypt applications (encrypt.cpp/decrypt.cpp for software, encrypt\_aesni.cpp/decrypt\_aesni.cpp for hardware) accept arguments in the format:
 
-\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true, numbers=none]
 ./bin/encrypt <aes_size> <password> [tweak_password]
 ./bin/decrypt <aes_size> <password> [tweak_password]
 ./bin/encrypt_aesni <aes_size> <password> [tweak_password]
@@ -120,14 +120,14 @@ The encrypt and decrypt applications (encrypt.cpp/decrypt.cpp for software, encr
 
 Where \texttt{aes\_size} is 128, 192, or 256. The third argument is optional. When provided, it enables counter-mode operation with tweak incrementing per block. Data flows through standard Unix pipes, allowing integration with other tools. Example usage for software AES without tweak:
 
-\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true, numbers=none]
 ./bin/encrypt 128 mypassword < plaintext.bin > ciphertext.bin
 ./bin/decrypt 128 mypassword < ciphertext.bin > decrypted.bin
 \end{lstlisting}
 
 For hardware-accelerated encryption with tweak:
 
-\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true]
+\begin{lstlisting}[language=bash, basicstyle=\tiny\ttfamily, breaklines=true, numbers=none]
 ./bin/encrypt_aesni 256 password1 password2 < plaintext.bin > cipher.bin
 ./bin/decrypt_aesni 256 password1 password2 < cipher.bin > plaintext.bin
 \end{lstlisting}
@@ -229,7 +229,7 @@ Where multiplication is in GF($2^8$) and addition is XOR.
 
 \textbf{Implementation Strategy}:
 Multiplication by 02 in GF($2^8$):
-\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
+\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily, numbers=none]
 uint8_t gmul2(uint8_t a) {
     return (a << 1) ^ (((a >> 7) & 1) * 0x1B);
 }
@@ -250,7 +250,7 @@ Many implementations use pre-computed tables for efficiency:
 AddRoundKey incorporates key material by XORing the state with the round key.
 
 \textbf{Implementation}:
-\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily]
+\begin{lstlisting}[language=C++, breaklines=true, basicstyle=\tiny\ttfamily, numbers=none]
 for (int i = 0; i < 16; i++) {
     state[i] ^= roundKey[round * 16 + i];
 }
@@ -322,6 +322,13 @@ Decryption uses inverse transformations in reverse order:
 
 Ciphertext stealing (CTS) enables secure encryption of data that does not align to block boundaries without padding. The encrypt.cpp and decrypt.cpp applications implement the ECB-based CTS approach described in NIST standards.
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.35\textwidth]{CTS_ECB_Encryption.png}
+\caption{Ciphertext Stealing}
+\label{fig:CTS}
+\end{figure}
+
 \textbf{Encryption Algorithm}: Given plaintext blocks $P_0, P_1, ..., P_{n-1}, P_n$ where $P_n$ is partial (M < 16 bytes), encryption proceeds as:
 
 \begin{algorithmic}
@@ -340,7 +347,7 @@ Ciphertext stealing (CTS) enables secure encryption of data that does not align 
 When the optional tweak password is provided, the applications activate counter mode where the tweak increments per encrypted block. Both encrypt.cpp and encrypt\_aesni.cpp implement this mechanism identically. After each block encryption, the tweak is incremented as a 128-bit big-endian integer using the utility function from utils.hpp:
 
 \vspace{0.05cm}
-\begin{lstlisting}[language=C++, caption=Counter Mode Tweak Increment, label=lst:tweak_increment, basicstyle=\scriptsize\ttfamily, breaklines=true]
+\begin{lstlisting}[language=C++, caption=Counter Mode Tweak Increment, label=lst:tweak_increment, basicstyle=\scriptsize\ttfamily, breaklines=true, numbers=none]
 vector<uint8_t> tweak_for_block = tweak;
 
 for (size_t i = 0; i < all_blocks.size(); i++) {
@@ -651,11 +658,11 @@ The T-AES project successfully achieved its main objective of implementing the A
 
 Throughout the project, particular attention was given to compliance with the AES standard and to ensuring full interoperability between both implementations. The introduction of ciphertext stealing allowed the system to correctly handle data that is not a multiple of the AES block size, preserving ciphertext length without the need for padding. This feature, combined with optional tweak support, makes the solution flexible and aligned with the requested encryption and decryption requirements.
 
-Testing covered all relevant cases, including different key sizes, the presence or absence of tweaks, and cross-validation between implementations. Results showed that both the software and hardware versions produced identical outputs for all tested configurations, confirming the correctness of the design and the consistency between the implementations. Performance benchmarks highlighted a significant speedup—around 3 to 5 times—when using AES-NI instructions, while maintaining consistent security and output integrity. The impact of the tweak mode was minimal, introducing only a small overhead, which further demonstrates the efficiency of the implementation.
+Testing covered all relevant cases, including different key sizes, the presence or absence of tweaks, and cross-validation between implementations. Results showed that both the software and hardware versions produced identical outputs for all tested configurations, confirming the correctness of the design and the consistency between the implementations. Performance benchmarks highlighted a significant speedup—around 3 to 5 times—when using AES-NI instructions, while maintaining consistent security and output integrity. The impact of the tweak mode was minimal, introducing only a small overhead, further demonstrating the efficiency of the implementation.
 
 From a broader perspective, this project illustrates how hardware acceleration can provide substantial benefits in both performance and resistance to side-channel attacks, thanks to constant-time execution and reduced reliance on memory lookups. Meanwhile, the software implementation remains valuable for understanding the inner workings of AES.
 
-In conclusion, T-AES represents a complete and robust implementation that meets the technical goals of the assignment while offering practical insights into how algorithmic design and computer architecture interact in modern cryptographic systems. Future work could extend this project with additional modes of operation like CBC, CTR or OFB ; authenticated encryption; or performance optimizations targeting parallel and multi-core environments.
+In conclusion, T-AES represents a complete and robust implementation that meets the technical goals of the assignment (together with the speed and stat functions that helped consolidate the theoretical classes with real tests), while offering practical insights into how algorithmic design and computer architecture interact in modern cryptographic systems. Future work could extend this project with additional modes of operation like CBC, CTR or OFB ; authenticated encryption; or performance optimizations targeting parallel and multi-core environments.
 
 \begin{thebibliography}{00}
 \bibitem{fips197} NIST, ``Advanced Encryption Standard (AES),'' FIPS PUB 197, 2001.
